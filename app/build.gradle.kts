@@ -7,6 +7,7 @@ plugins {
 android {
     namespace = "com.thacharly.chaosengine"
     compileSdk = 36
+    ndkVersion = "25.2.9519653"
 
     defaultConfig {
         applicationId = "com.thacharly.chaosengine"
@@ -18,19 +19,15 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
-                arguments += "-DANDROID_STL=c++_shared" // A SFML le gusta la standard library compartida
+                arguments += "-DANDROID_STL=c++_shared"
             }
         }
         ndk {
-            abiFilters.add("arm64-v8a") // Solo compilamos para chips de celular modernos (El del S25)
+            abiFilters.add("arm64-v8a")
         }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17"
-            }
-        }
+        // (The second externalNativeBuild block that was here has been removed)
     }
 
     buildTypes {
@@ -62,11 +59,4 @@ android {
 
 dependencies {
 
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.material)
-    implementation(libs.androidx.constraintlayout)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
 }

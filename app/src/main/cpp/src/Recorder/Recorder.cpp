@@ -1,10 +1,13 @@
 #include "Recorder.hpp"
+
+#ifndef __ANDROID__
+
 #include <iostream>
 #include <stdexcept>
 #include <algorithm> 
 #include <cmath>     
 #include <fstream> 
-#include <SFML/Window/Context.hpp> // Para enganchar funciones de OpenGL
+#include <SFML/Window/Context.hpp>
 
 // --- DEFINICIONES DE OPENGL ---
 #ifndef GL_PIXEL_PACK_BUFFER
@@ -28,8 +31,8 @@ glMapBufferFunc my_glMapBuffer = nullptr;
 glUnmapBufferFunc my_glUnmapBuffer = nullptr;
 glDeleteBuffersFunc my_glDeleteBuffers = nullptr;
 
-Recorder::Recorder(int width, int height, int fps, const std::string& outputFilename) 
-    : width(width), height(height), fps(fps), finalFilename(outputFilename) 
+Recorder::Recorder(int width, int height, int fps, const std::string& outputFilename)
+    : width(width), height(height), fps(fps), finalFilename(outputFilename)
 {
     this->width = width + (width % 2);
     this->height = height + (height % 2);
@@ -38,18 +41,15 @@ Recorder::Recorder(int width, int height, int fps, const std::string& outputFile
     tempAudioFilename = "temp_audio_render.wav";
 
     // --- GRABACIÓN UNIVERSAL POR CPU (libx264) ---
-    // Usamos libx264 (H.264 por software). Corre en cualquier máquina sin importar la GPU.
-    // -preset superfast: Fundamental para que la CPU no se atragante escupiendo 4K.
-    // -crf 18: Calidad Constante visualmente sin pérdida (0-51, menor es mejor).
     std::string cmd = "ffmpeg -y -loglevel warning "
                       "-f rawvideo -vcodec rawvideo "
                       "-s " + std::to_string(width) + "x" + std::to_string(height) + " "
                       "-pix_fmt rgba "
                       "-r " + std::to_string(fps) + " "
                       "-i - "
-                      "-vf \"vflip,format=yuv420p\" " 
-                      "-c:v libx264 -preset superfast -crf 18 " 
-                      "\"" + tempVideoFilename + "\""; 
+                      "-vf \"vflip,format=yuv420p\" "
+                      "-c:v libx264 -preset superfast -crf 18 "
+                      "\"" + tempVideoFilename + "\"";
 
     ffmpegPipe = popen(cmd.c_str(), "w");
     if (!ffmpegPipe) throw std::runtime_error("No se pudo iniciar FFmpeg.");
@@ -71,15 +71,15 @@ Recorder::Recorder(int width, int height, int fps, const std::string& outputFile
     // --- 2. INICIALIZAMOS EL DOBLE BUFFER (PING-PONG) ---
     size_t dataSize = this->width * this->height * 4;
     my_glGenBuffers(2, pbo);
-    
+
     my_glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[0]);
     my_glBufferData(GL_PIXEL_PACK_BUFFER, dataSize, nullptr, GL_STREAM_READ);
-    
+
     my_glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[1]);
     my_glBufferData(GL_PIXEL_PACK_BUFFER, dataSize, nullptr, GL_STREAM_READ);
-    
+
     my_glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    
+
     isWorkerRunning = true;
     workerThread = std::thread(&Recorder::workerLoop, this);
 
@@ -87,7 +87,7 @@ Recorder::Recorder(int width, int height, int fps, const std::string& outputFile
 }
 
 Recorder::~Recorder() {
-    stop(); 
+    stop();
     if (my_glDeleteBuffers) {
         my_glDeleteBuffers(2, pbo);
     }
@@ -96,42 +96,34 @@ Recorder::~Recorder() {
 void Recorder::addFrame(const sf::Texture& texture) {
     if (!ffmpegPipe || !isRecording) return;
     currentFrame++;
-    
+
     size_t dataSize = width * height * 4;
 
     // 1. Forzamos a SFML a vincular su textura en la máquina de estados de OpenGL
     sf::Texture::bind(&texture);
 
     // 2. TRANSFERENCIA ASÍNCRONA (VRAM -> PBO)
-    // Le ordenamos al controlador DMA de la GPU que empiece a copiar la textura.
-    // Esto NO bloquea la CPU, retorna instantáneamente.
     my_glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[pboIndex]);
     glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
     // 3. LEER EL FRAME ANTERIOR (PBO -> RAM)
     if (!firstFrame) {
         my_glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[nextPboIndex]);
-        
-        // Mapeamos la memoria del PBO que ya terminó de transferirse
         GLubyte* ptr = (GLubyte*)my_glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
 
         if (ptr) {
-            // Acá sí hacemos la copia a RAM, pero la info ya viajó por el PCIe
             std::vector<sf::Uint8> buffer(ptr, ptr + dataSize);
             my_glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 
-            // Lo mandamos al hilo esclavo de FFmpeg con BACKPRESSURE
             {
                 std::unique_lock<std::mutex> lock(queueMutex);
-                // Si la cola llega al máximo, pausamos la simulación hasta que FFmpeg libere espacio
                 queueSpaceCV.wait(lock, [this] { return frameQueue.size() < MAX_QUEUE_SIZE; });
                 frameQueue.push(std::move(buffer));
             }
             queueCV.notify_one();
         }
     } else {
-        // Sacrificamos el primerísimo frame visual porque el PBO "next" todavía tiene basura
-        firstFrame = false; 
+        firstFrame = false;
     }
 
     // 4. LIMPIEZA
@@ -143,27 +135,23 @@ void Recorder::addFrame(const sf::Texture& texture) {
     nextPboIndex = (pboIndex + 1) % 2;
 }
 
-// ... EL RESTO QUEDA IGUAL (workerLoop, stop, addAudioEvent) ...
-
 void Recorder::workerLoop() {
     while (true) {
-        std::vector<sf::Uint8> currentFrameData; 
+        std::vector<sf::Uint8> currentFrameData;
         {
             std::unique_lock<std::mutex> lock(queueMutex);
             queueCV.wait(lock, [this] { return !frameQueue.empty() || !isWorkerRunning; });
-            
+
             if (frameQueue.empty() && !isWorkerRunning) break;
 
             currentFrameData = std::move(frameQueue.front());
             frameQueue.pop();
         }
-        
-        // ¡AVISAMOS AL HILO PRINCIPAL QUE HAY LUGAR EN LA RAM!
-        queueSpaceCV.notify_one(); 
 
-        // Leemos directo de la memoria contigua del vector para escupirlo a FFmpeg
+        queueSpaceCV.notify_one();
+
         if (ffmpegPipe) {
-            fwrite(currentFrameData.data(), 1, width * height * 4, ffmpegPipe); 
+            fwrite(currentFrameData.data(), 1, width * height * 4, ffmpegPipe);
         }
     }
 }
@@ -173,7 +161,6 @@ void Recorder::stop() {
     isFinished = true;
     isRecording = false;
 
-    // --- FRENAR EL HILO LIMPIAMENTE ---
     {
         std::unique_lock<std::mutex> lock(queueMutex);
         isWorkerRunning = false;
@@ -189,7 +176,6 @@ void Recorder::stop() {
         ffmpegPipe = nullptr;
     }
 
-    // (El resto del método stop() del Audio Mix y Fusión dejalo igualito a como lo tenés)
     if (!audioMixBuffer.empty()) {
         std::cout << "[REC] Procesando audio (Normalizando)..." << std::endl;
         float maxPeak = 0.0f;
@@ -212,19 +198,19 @@ void Recorder::stop() {
             if (normalizedSample > 32767.0f) normalizedSample = 32767.0f;
             if (normalizedSample < -32768.0f) normalizedSample = -32768.0f;
             sf::Int16 s = static_cast<sf::Int16>(normalizedSample);
-            finalSamples.push_back(s); 
-            finalSamples.push_back(s); 
+            finalSamples.push_back(s);
+            finalSamples.push_back(s);
         }
 
         sf::OutputSoundFile audioFile;
-        if (audioFile.openFromFile(tempAudioFilename, 44100, 2)) { 
+        if (audioFile.openFromFile(tempAudioFilename, 44100, 2)) {
             audioFile.write(finalSamples.data(), finalSamples.size());
-            audioFile.close(); 
+            audioFile.close();
         }
     }
 
     std::cout << "[REC] Iniciando fusion final..." << std::endl;
-    std::string mergeCmd = "ffmpeg -y -loglevel error -i " + tempVideoFilename + " -i " + tempAudioFilename + 
+    std::string mergeCmd = "ffmpeg -y -loglevel error -i " + tempVideoFilename + " -i " + tempAudioFilename +
                            " -c:v copy -c:a aac -b:a 192k -shortest " + finalFilename;
     int result = system(mergeCmd.c_str());
 
@@ -242,13 +228,26 @@ void Recorder::addAudioEvent(const sf::Int16* samples, std::size_t sampleCount, 
 
     size_t startIndex = (size_t)((double)currentFrame / fps * sampleRate);
     size_t requiredSize = startIndex + sampleCount;
-    
+
     if (audioMixBuffer.size() < requiredSize) {
-        audioMixBuffer.resize(requiredSize, 0.0f); 
+        audioMixBuffer.resize(requiredSize, 0.0f);
     }
-    
+
     float volFactor = volume / 100.0f;
     for (size_t i = 0; i < sampleCount; ++i) {
         audioMixBuffer[startIndex + i] += (float)samples[i] * volFactor;
     }
 }
+
+#else
+
+// --- STUBS PARA ANDROID ---
+// En mobile matamos la lógica pesada de FFmpeg y los PBOs para que el compilador del NDK no explote.
+Recorder::Recorder(int width, int height, int fps, const std::string& outputFilename) : width(width), height(height), fps(fps) {}
+Recorder::~Recorder() {}
+void Recorder::addFrame(const sf::Texture& texture) {}
+void Recorder::addAudioEvent(const sf::Int16* samples, std::size_t sampleCount, float volume) {}
+void Recorder::stop() {}
+void Recorder::workerLoop() {}
+
+#endif
