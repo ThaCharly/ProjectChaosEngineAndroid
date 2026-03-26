@@ -214,10 +214,7 @@ int main()
     style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.0f, 0.8f, 1.0f, 1.0f);
 
     sf::RenderTexture gameBuffer;
-    if (!gameBuffer.resize({RENDER_WIDTH, RENDER_HEIGHT})) {
-        std::cerr << "Pah, te quedaste sin VRAM bo. Falló el RenderTexture." << std::endl;
-        return -1;
-    }
+    // Se inicializa lazy dentro del loop
 
     // --- SETUP DE BLOOM ---
 #ifndef __ANDROID__
@@ -261,10 +258,7 @@ int main()
     unsigned int BLOOM_H = RENDER_HEIGHT / 2;
 
     sf::RenderTexture brightnessBuffer, blurBuffer1, blurBuffer2, finalBuffer;
-    brightnessBuffer.resize({BLOOM_W, BLOOM_H});
-    blurBuffer1.resize({BLOOM_W, BLOOM_H});
-    blurBuffer2.resize({BLOOM_W, BLOOM_H});
-    finalBuffer.resize({RENDER_WIDTH, RENDER_HEIGHT}); // Este es el 4K final que grabamos
+    // Se inicializan lazy dentro del loop (Android necesita la surface GL lista primero)
 
     // Variables de control para ImGui
 #ifdef __ANDROID__
@@ -315,7 +309,7 @@ int main()
         ImVec4(1, 0.8f, 0, 1)
     };
 
-    sf::Texture gridTexture = createGridTexture(RENDER_WIDTH, RENDER_HEIGHT);
+    sf::Texture gridTexture;
     sf::Sprite background(gridTexture);
 
     std::vector<Trail> trails(4);
@@ -379,9 +373,10 @@ int main()
     bool isHoveringRotate = false;
     bool isHoveringMove = false;
 
-    InputManager inputManager; // <-- ACÁ
+    InputManager inputManager;
 
     bool appActive = true;
+    bool buffersReady = false;
 
     while (window.isOpen()) {
 
@@ -408,6 +403,18 @@ int main()
         if (!appActive) {
             sf::sleep(sf::milliseconds(100));
             continue;
+        }
+
+        // Lazy-init de RenderTextures: en Android la surface GL no está lista hasta el primer frame activo
+        if (!buffersReady) {
+            gameBuffer.resize({RENDER_WIDTH, RENDER_HEIGHT});
+            brightnessBuffer.resize({BLOOM_W, BLOOM_H});
+            blurBuffer1.resize({BLOOM_W, BLOOM_H});
+            blurBuffer2.resize({BLOOM_W, BLOOM_H});
+            finalBuffer.resize({RENDER_WIDTH, RENDER_HEIGHT});
+            gridTexture = createGridTexture(RENDER_WIDTH, RENDER_HEIGHT);
+            background.setTexture(gridTexture, true);
+            buffersReady = true;
         }
 
         ImGui::SFML::Update(window, deltaClock.restart());
