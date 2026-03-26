@@ -96,7 +96,6 @@ else()
 endif()
 
 # 8. Linkeo
-# 8. Linkeo
 if(ANDROID)
     # En Android tenemos que linkear a mano OpenGL ES, EGL y las libs base del SO
     target_link_libraries(ChaosEngine
@@ -112,8 +111,14 @@ if(ANDROID)
             log
             android
     )
+
+    # --- LA MAGIA ACÁ ---
+    # Obligamos al linker a meter el punto de entrada de Android sí o sí,
+    # sino lo optimiza y lo borra porque no lo ve llamado explícitamente en nuestro código.
+    target_link_options(ChaosEngine PRIVATE -Wl,-u,ANativeActivity_onCreate)
+
 else()
-    # En PC zafamos porque SFML ya se encarga de arrastrar OpenGL
+    # En PC zafamos porque SFML ya se encarga de arrastrar todo
     target_link_libraries(ChaosEngine
             sfml-graphics
             sfml-window
