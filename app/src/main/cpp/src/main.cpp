@@ -164,7 +164,10 @@ int main()
     int recordFPS = 60;
 
     sf::VideoMode desktopMode = sf::VideoMode::getDesktopMode();
-    sf::RenderWindow window(desktopMode, "ChaosEngine - Neon Lab", sf::State::Fullscreen);
+    sf::ContextSettings settings;
+    settings.majorVersion = 2;
+    settings.minorVersion = 0;
+    sf::RenderWindow window(sf::VideoMode(desktopMode), "ChaosEngine", sf::Style::Default, sf::State::Fullscreen, settings);
     window.setFramerateLimit(simFPS);
 
     if (!ImGui::SFML::Init(window)) return -1;
@@ -217,10 +220,12 @@ int main()
     }
 
     // --- SETUP DE BLOOM ---
+#ifndef __ANDROID__
     if (!sf::Shader::isAvailable()) {
         std::cerr << "Pah, tu GPU no banca shaders. Olvidate del neón." << std::endl;
         return -1;
     }
+#endif
 
     sf::Font uiFont;
 #ifdef __ANDROID__
@@ -245,9 +250,11 @@ int main()
     }
 
     sf::Shader brightnessShader, blurShader, blendShader;
+#ifndef __ANDROID__
     brightnessShader.loadFromMemory(brightnessFrag, sf::Shader::Type::Fragment);
     blurShader.loadFromMemory(blurFrag, sf::Shader::Type::Fragment);
     blendShader.loadFromMemory(blendFrag, sf::Shader::Type::Fragment);
+#endif
 
     // Achicamos a la mitad para el cálculo del brillo. ¡Magia negra para optimizar!
     unsigned int BLOOM_W = RENDER_WIDTH / 2;
@@ -260,7 +267,11 @@ int main()
     finalBuffer.resize({RENDER_WIDTH, RENDER_HEIGHT}); // Este es el 4K final que grabamos
 
     // Variables de control para ImGui
+#ifdef __ANDROID__
+    bool enableBloom = false;
+#else
     bool enableBloom = true;
+#endif
     float bloomThreshold = 0.9f; // A partir de qué brillo empieza a generar glow
     float bloomMultiplier = 0.5f; // Intensidad del neón
     int blurIterations = 3; // Cuántas pasadas de blur (más = glow más grande)
