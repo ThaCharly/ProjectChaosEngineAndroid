@@ -575,7 +575,8 @@ void PhysicsWorld::loadMap(const std::string& filename) {
 
     // Leemos el bloque crudo desde el APK (o disco en PC) a un string
     std::string buffer;
-    buffer.resize(stream.getSize());
+    // SFML 3: getSize() y read() ahora devuelven std::optional
+    buffer.resize(stream.getSize().value());
     stream.read(buffer.data(), buffer.size());
     
     // Lo metemos en un stream de memoria para que el resto del código no se entere del cambio
@@ -1308,7 +1309,8 @@ void PhysicsWorld::loadSong(const std::string& filename) {
     }
 
     std::string buffer;
-    buffer.resize(stream.getSize());
+    // SFML 3: getSize() y read() ahora devuelven std::optional
+    buffer.resize(stream.getSize().value());
     stream.read(buffer.data(), buffer.size());
     std::istringstream file(buffer);
 

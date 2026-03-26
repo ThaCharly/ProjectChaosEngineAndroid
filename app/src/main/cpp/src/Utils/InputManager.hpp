@@ -29,7 +29,7 @@ public:
         pointer.handledByUI = uiWantsCapture;
 
         // Soporte Híbrido: Priorizamos Touch (Android), fallback a Mouse (PC)
-        bool isDown = sf::Touch::isDown(0) || sf::Mouse::isButtonPressed(sf::Mouse::Left);
+        bool isDown = sf::Touch::isDown(0) || sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
         
         sf::Vector2i currentPosInt;
         if (sf::Touch::isDown(0)) {

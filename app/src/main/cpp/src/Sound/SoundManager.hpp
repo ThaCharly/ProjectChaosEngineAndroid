@@ -6,6 +6,8 @@
 #include <cmath>
 #include <iostream>
 #include <random>
+#include <optional>
+#include <cstdint>
 
 // Forward declaration
 class Recorder;
@@ -24,7 +26,7 @@ public:
         }
 
         // Pool de voces (aumenté un poco por si se pica la canción rápida)
-        for(int i=0; i<64; ++i) soundPool.emplace_back();
+        soundPool.resize(64); // Se llena de std::nullopt para inicializarlos On-Demand (SFML 3)
     }
 
     void setRecorder(Recorder* rec) {
@@ -34,9 +36,9 @@ public:
     // Generador de ondas (Senoide suave)
     void generateTone(int id, float frequency) {
         const unsigned SAMPLE_RATE = 44100;
-        const int AMPLITUDE = 18000; 
+        const int AMPLITUDE = 18000;
 
-        std::vector<sf::Int16> rawSamples;
+        std::vector<std::int16_t> rawSamples;
         float duration = 0.3f; // Un poquito más cortas para melodías rápidas
         int numSamples = (int)(SAMPLE_RATE * duration);
         float attackTime = 0.01f; // Ataque rápido
@@ -44,12 +46,12 @@ public:
         for (int i = 0; i < numSamples; i++) {
             float t = (float)i / SAMPLE_RATE;
             float wave = std::sin(2 * 3.14159f * frequency * t);
-            
+
             float envelope = 0.0f;
             if (t < attackTime) {
                 envelope = t / attackTime;
             } else {
-                envelope = std::exp(-10.0f * (t - attackTime)); 
+                envelope = std::exp(-10.0f * (t - attackTime));
             }
 
             // Safety release para evitar "pops"
@@ -60,11 +62,12 @@ public:
                 envelope *= fade;
             }
 
-            rawSamples.push_back((sf::Int16)(wave * envelope * AMPLITUDE));
+            rawSamples.push_back((std::int16_t)(wave * envelope * AMPLITUDE));
         }
 
         sf::SoundBuffer buffer;
-        if (buffer.loadFromSamples(&rawSamples[0], rawSamples.size(), 1, SAMPLE_RATE)) {
+        // SFML 3 exige el Channel Map. Como es 1 canal, le pasamos {sf::SoundChannel::Mono}
+        if (buffer.loadFromSamples(rawSamples.data(), rawSamples.size(), 1, SAMPLE_RATE, {sf::SoundChannel::Mono})) {
             midiBuffers[id] = buffer;
         }
     }
@@ -74,19 +77,21 @@ public:
         if (noteNumber < 0 || noteNumber > 127) return;
         if (midiBuffers.find(noteNumber) == midiBuffers.end()) return;
 
-        sf::Sound* sound = getFreeSound();
-        if (sound) {
-            sound->setBuffer(midiBuffers[noteNumber]);
-            sound->setVolume(volume); 
-            sound->setPitch(1.0f);
-            sound->setPosition(0, 0, 0); // Sonido 2D plano para la música
-            sound->setAttenuation(0);    // Que se escuche igual en todos lados
-            sound->play();
+        for (auto& s : soundPool) {
+            if (!s.has_value() || s->getStatus() == sf::Sound::Status::Stopped) {
+                s.emplace(midiBuffers[noteNumber]); // Magia RAII: Construye el sonido in-place con su buffer
+                s->setVolume(volume);
+                s->setPitch(1.0f);
+                s->setPosition({0.0f, 0.0f, 0.0f}); // Exige un vector estricto 3D
+                s->setAttenuation(0.0f);
+                s->play();
+                break;
+            }
         }
 
         if (recorder) {
-             const sf::SoundBuffer& buf = midiBuffers[noteNumber];
-             sendToRecorder(buf.getSamples(), buf.getSampleCount(), volume);
+            const sf::SoundBuffer& buf = midiBuffers[noteNumber];
+            sendToRecorder(buf.getSamples(), buf.getSampleCount(), volume);
         }
     }
 
@@ -94,23 +99,16 @@ public:
     void playSound(int id, float xPosition, float worldWidth) {
         // Mapeo trucho: Si piden ID 1 (Do), tocamos MIDI 60 (Do central)
         // Esto es solo para que no crashee si usas el modo viejo.
-        int midiMap[] = { 0, 60, 62, 64, 65, 67, 69, 71, 72 }; 
+        int midiMap[] = { 0, 60, 62, 64, 65, 67, 69, 71, 72 };
         if (id > 0 && id <= 8) playMidiNote(midiMap[id]);
     }
 
 private:
-    sf::Sound* getFreeSound() {
-        for (auto& s : soundPool) {
-            if (s.getStatus() == sf::Sound::Stopped) return &s;
-        }
-        return &soundPool[0]; 
-    }
-
-    void sendToRecorder(const sf::Int16* samples, std::size_t count, float vol);
+    void sendToRecorder(const std::int16_t* samples, std::size_t count, float vol);
 
     // Cambiamos el nombre para ser claros
     std::map<int, sf::SoundBuffer> midiBuffers;
-    std::vector<sf::Sound> soundPool;
+    std::vector<std::optional<sf::Sound>> soundPool;
     Recorder* recorder = nullptr;
     std::mt19937 rng;
 };

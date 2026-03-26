@@ -11,10 +11,11 @@
 #include <deque>
 #include <cstdlib>
 #include <memory>
+#include <cstdint>
 
 #include "Physics/PhysicsWorld.hpp"
 #include "Recorder/Recorder.hpp"
-#include "Sound/SoundManager.hpp" 
+#include "Sound/SoundManager.hpp"
 #include "Utils/InputManager.hpp"
 
 #ifndef __ANDROID__
@@ -51,12 +52,12 @@ const char* brightnessFrag = R"(
     uniform float threshold;
     void main() {
         vec4 color = texture2D(source, gl_TexCoord[0].xy);
-        
+
         // NORMALIZACIÓN DE NEÓN:
         // Usamos el canal más alto del pixel en lugar de la luminancia del ojo humano.
         // Así un Azul puro (0,0,1) y un Verde puro (0,1,0) tienen un brillo = 1.0.
         float maxBrightness = max(color.r, max(color.g, color.b));
-        
+
         if (maxBrightness > threshold) {
             gl_FragColor = color;
         } else {
@@ -77,13 +78,13 @@ const char* blurFrag = R"(
         vec4 color = vec4(0.0);
         vec2 off1 = vec2(1.3846153846) * dir;
         vec2 off2 = vec2(3.2307692308) * dir;
-        
+
         color += texture2D(source, uv) * 0.2270270270;
         color += texture2D(source, uv + off1) * 0.3162162162;
         color += texture2D(source, uv - off1) * 0.3162162162;
         color += texture2D(source, uv + off2) * 0.0702702703;
         color += texture2D(source, uv - off2) * 0.0702702703;
-        
+
         gl_FragColor = color;
     }
 )";
@@ -106,21 +107,21 @@ const char* blendFrag = R"(
 // 1. Arriba de todo, cambiá la grilla para que responda a la resolución
 sf::Texture createGridTexture(int width, int height) {
     sf::RenderTexture rt;
-    rt.create(width, height);
+    rt.resize({(unsigned int)width, (unsigned int)height});
     rt.clear(sf::Color::Transparent); // <--- MAGIA ACÁ: Fondo transparente
     sf::RectangleShape line;
-    line.setFillColor(sf::Color(10, 10, 10)); 
-    
+    line.setFillColor(sf::Color(10, 10, 10));
+
     float lineThick = (width / 1080.0f) * 2.0f;
-    int stepSize = width / 18; 
-    
-    line.setSize(sf::Vector2f(lineThick, (float)height));
-    for (int x = 0; x < width; x += stepSize) { 
-        line.setPosition((float)x, 0.0f); rt.draw(line);
+    int stepSize = width / 18;
+
+    line.setSize({lineThick, (float)height});
+    for (int x = 0; x < width; x += stepSize) {
+        line.setPosition({(float)x, 0.0f}); rt.draw(line);
     }
-    line.setSize(sf::Vector2f((float)width, lineThick));
+    line.setSize({(float)width, lineThick});
     for (int y = 0; y < height; y += stepSize) {
-        line.setPosition(0.0f, (float)y); rt.draw(line);
+        line.setPosition({0.0f, (float)y}); rt.draw(line);
     }
     rt.display();
     return rt.getTexture();
@@ -130,14 +131,14 @@ sf::Color lerpColor(const sf::Color& a, const sf::Color& b, float t) {
     if (t < 0.0f) t = 0.0f;
     if (t > 1.0f) t = 1.0f;
     return sf::Color(
-        (sf::Uint8)(a.r + (b.r - a.r) * t),
-        (sf::Uint8)(a.g + (b.g - a.g) * t),
-        (sf::Uint8)(a.b + (b.b - a.b) * t),
-        (sf::Uint8)(a.a + (b.a - a.a) * t)
+            (std::uint8_t)(a.r + (b.r - a.r) * t),
+            (std::uint8_t)(a.g + (b.g - a.g) * t),
+            (std::uint8_t)(a.b + (b.b - a.b) * t),
+            (std::uint8_t)(a.a + (b.a - a.a) * t)
     );
 }
 
-void SoundManager::sendToRecorder(const sf::Int16* samples, std::size_t count, float vol) {
+void SoundManager::sendToRecorder(const std::int16_t* samples, std::size_t count, float vol) {
     if (recorder) {
         recorder->addAudioEvent(samples, count, vol);
     }
@@ -163,13 +164,13 @@ int main()
     int recordFPS = 60;
 
     sf::VideoMode desktopMode = sf::VideoMode::getDesktopMode();
-    sf::RenderWindow window(desktopMode, "ChaosEngine - Neon Lab", sf::Style::Fullscreen);
+    sf::RenderWindow window(desktopMode, "ChaosEngine - Neon Lab", sf::State::Fullscreen);
     window.setFramerateLimit(simFPS);
 
     if (!ImGui::SFML::Init(window)) return -1;
 
     // --- ESCALADO PARA MÓVILES (Fat Finger UX) ---
-    bool isMobile = (desktopMode.width < 800);
+    bool isMobile = (desktopMode.size.x < 800);
     if (isMobile) {
         ImGui::GetStyle().ScaleAllSizes(2.0f);
         ImGui::GetIO().FontGlobalScale = 2.0f;
@@ -183,7 +184,7 @@ int main()
     style.GrabRounding = 4.0f;
     style.PopupRounding = 4.0f;
     style.ScrollbarRounding = 6.0f;
-    
+
     // MAGIA UX: Márgenes dinámicos. Si es mobile, todo respira más para los dedos.
     style.ItemSpacing = ImVec2(isMobile ? 12.0f : 8.0f, isMobile ? 10.0f : 6.0f);
     style.FramePadding = ImVec2(isMobile ? 12.0f : 8.0f, isMobile ? 10.0f : 4.0f);
@@ -203,14 +204,14 @@ int main()
     style.Colors[ImGuiCol_Button] = ImVec4(0.20f, 0.20f, 0.22f, 1.0f);
     style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.30f, 0.30f, 0.33f, 1.0f);
     style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.40f, 0.40f, 0.44f, 1.0f);
-    
+
     // Acentos visuales para feedback claro
-    style.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 0.7f, 1.0f, 1.0f); 
+    style.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 0.7f, 1.0f, 1.0f);
     style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.0f, 0.7f, 1.0f, 1.0f);
     style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.0f, 0.8f, 1.0f, 1.0f);
 
     sf::RenderTexture gameBuffer;
-    if (!gameBuffer.create(RENDER_WIDTH, RENDER_HEIGHT)) {
+    if (!gameBuffer.resize({RENDER_WIDTH, RENDER_HEIGHT})) {
         std::cerr << "Pah, te quedaste sin VRAM bo. Falló el RenderTexture." << std::endl;
         return -1;
     }
@@ -221,13 +222,13 @@ int main()
         return -1;
     }
 
-    sf::Font uiFont; 
-    #ifdef __ANDROID__
-        // En Android, la raíz es directamente la carpeta que Gradle empaqueta como 'assets'
-        uiFont.loadFromFile("fonts/jetbrains_mono.ttf");
-    #else
-        uiFont.loadFromFile("../fonts/jetbrains_mono.ttf");
-    #endif
+    sf::Font uiFont;
+#ifdef __ANDROID__
+    // En Android, la raíz es directamente la carpeta que Gradle empaqueta como 'assets'
+    uiFont.openFromFile("fonts/jetbrains_mono.ttf");
+#else
+    uiFont.openFromFile("../fonts/jetbrains_mono.ttf");
+#endif
 
         sf::Texture knifeTex;
         // Si tenés una carpeta assets, meté el PNG ahí con el nombre "knife.png"
@@ -244,19 +245,19 @@ int main()
     }
 
     sf::Shader brightnessShader, blurShader, blendShader;
-    brightnessShader.loadFromMemory(brightnessFrag, sf::Shader::Fragment);
-    blurShader.loadFromMemory(blurFrag, sf::Shader::Fragment);
-    blendShader.loadFromMemory(blendFrag, sf::Shader::Fragment);
+    brightnessShader.loadFromMemory(brightnessFrag, sf::Shader::Type::Fragment);
+    blurShader.loadFromMemory(blurFrag, sf::Shader::Type::Fragment);
+    blendShader.loadFromMemory(blendFrag, sf::Shader::Type::Fragment);
 
     // Achicamos a la mitad para el cálculo del brillo. ¡Magia negra para optimizar!
     unsigned int BLOOM_W = RENDER_WIDTH / 2;
     unsigned int BLOOM_H = RENDER_HEIGHT / 2;
-    
+
     sf::RenderTexture brightnessBuffer, blurBuffer1, blurBuffer2, finalBuffer;
-    brightnessBuffer.create(BLOOM_W, BLOOM_H);
-    blurBuffer1.create(BLOOM_W, BLOOM_H);
-    blurBuffer2.create(BLOOM_W, BLOOM_H);
-    finalBuffer.create(RENDER_WIDTH, RENDER_HEIGHT); // Este es el 4K final que grabamos
+    brightnessBuffer.resize({BLOOM_W, BLOOM_H});
+    blurBuffer1.resize({BLOOM_W, BLOOM_H});
+    blurBuffer2.resize({BLOOM_W, BLOOM_H});
+    finalBuffer.resize({RENDER_WIDTH, RENDER_HEIGHT}); // Este es el 4K final que grabamos
 
     // Variables de control para ImGui
     bool enableBloom = true;
@@ -265,9 +266,9 @@ int main()
     int blurIterations = 3; // Cuántas pasadas de blur (más = glow más grande)
 
     std::unique_ptr<Recorder> recorder = nullptr;
-    SoundManager soundManager; 
+    SoundManager soundManager;
     PhysicsWorld physics(RENDER_WIDTH, RENDER_HEIGHT, &soundManager);
-    physics.isPaused = true; 
+    physics.isPaused = true;
     const auto& bodies = physics.getDynamicBodies();
 
     #ifndef __ANDROID__
@@ -285,22 +286,22 @@ int main()
     float accumulator = 0.0f;
     float globalTime = 0.0f;
 
-    float victoryTimer = 0.0f;       
-    bool victorySequenceStarted = false; 
-    const float VICTORY_DELAY = 0.5f; 
+    float victoryTimer = 0.0f;
+    bool victorySequenceStarted = false;
+    const float VICTORY_DELAY = 0.5f;
 
     const char* racerNames[] = { "Cyan", "Magenta", "Green", "Yellow" };
     sf::Color racerColors[] = {
-        sf::Color(0, 255, 255),   
-        sf::Color(255, 0, 255),   
-        sf::Color(57, 255, 20),   
-        sf::Color(255, 215, 0)    
+        sf::Color(0, 255, 255),
+        sf::Color(255, 0, 255),
+        sf::Color(57, 255, 20),
+        sf::Color(255, 215, 0)
     };
     ImVec4 guiColors[] = {
-        ImVec4(0, 1, 1, 1),   
-        ImVec4(1, 0, 1, 1),   
-        ImVec4(0.2f, 1, 0.1f, 1),   
-        ImVec4(1, 0.8f, 0, 1)    
+        ImVec4(0, 1, 1, 1),
+        ImVec4(1, 0, 1, 1),
+        ImVec4(0.2f, 1, 0.1f, 1),
+        ImVec4(1, 0.8f, 0, 1)
     };
 
     sf::Texture gridTexture = createGridTexture(RENDER_WIDTH, RENDER_HEIGHT);
@@ -328,23 +329,23 @@ int main()
         AmbientParticle p;
         p.basePos.x = (float)(std::rand() % RENDER_WIDTH);
         p.yPos = (float)(std::rand() % RENDER_HEIGHT);
-        
+
         // Más velocidad vertical: de 20 a 60 px/s (antes era 5-30)
-        p.speedY = -((float)(std::rand() % 40) + 20.0f); 
-        
+        p.speedY = -((float)(std::rand() % 40) + 20.0f);
+
         p.phaseOffset = (float)(std::rand() % 628) / 100.0f;
-        
+
         // Vaivén más rápido: frecuencia de oscilación aumentada
-        p.phaseSpeed = ((float)(std::rand() % 25) + 15.0f) / 10.0f; 
-        
+        p.phaseSpeed = ((float)(std::rand() % 25) + 15.0f) / 10.0f;
+
         // Amplitud mucho mayor: recorren más espacio horizontal (30 a 110 px)
-        p.amplitude = (float)(std::rand() % 80) + 30.0f; 
-        
+        p.amplitude = (float)(std::rand() % 80) + 30.0f;
+
         p.size = (float)(std::rand() % 3) + 2.0f;
-        
+
         // Mantenemos un alpha bajísimo para que sea un detalle sutil
-        sf::Uint8 alpha = 15 + (std::rand() % 25); 
-        p.color = sf::Color(180, 230, 255, alpha); 
+        std::uint8_t alpha = 15 + (std::rand() % 25);
+        p.color = sf::Color(180, 230, 255, alpha);
         ambientDust.push_back(p);
     }
 
@@ -352,7 +353,7 @@ int main()
     enum class GizmoState { None, Moving, Rotating, Scaling };
     GizmoState currentGizmo = GizmoState::None;
     b2Vec2 dragOffset(0.0f, 0.0f);
-    
+
     // Guardamos el estado inicial exacto para usar "Deltas" (cero saltos)
     float initialMouseAngle = 0.0f;
     float initialRotation = 0.0f;
@@ -360,10 +361,10 @@ int main()
     float initialHeight = 0.0f;
     b2Vec2 initialPos(0.0f, 0.0f);
     b2Vec2 initialMouseLocal(0.0f, 0.0f);
-    
+
     // Variables de UX
     int activeScaleCorner = -1; // 0=TL, 1=TR, 2=BR, 3=BL
-    int hoveredScaleCorner = -1; 
+    int hoveredScaleCorner = -1;
     bool isHoveringRotate = false;
     bool isHoveringMove = false;
 
@@ -373,18 +374,21 @@ int main()
 
     while (window.isOpen()) {
 
-        sf::Event event;
-        while (window.pollEvent(event)) {
-            ImGui::SFML::ProcessEvent(window, event);
-            if (event.type == sf::Event::Closed) window.close();
-            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) window.close();
-            
-            // --- MANEJO DEL CICLO DE VIDA EN ANDROID ---
-            if (event.type == sf::Event::LostFocus) appActive = false;
-            if (event.type == sf::Event::GainedFocus) appActive = true;
+        while (const std::optional<sf::Event> event = window.pollEvent()) {
+            ImGui::SFML::ProcessEvent(window, *event);
 
-            if (event.type == sf::Event::Resized) {
-                sf::FloatRect visibleArea(0, 0, event.size.width, event.size.height);
+            if (event->is<sf::Event::Closed>()) window.close();
+
+            if (const auto* key = event->getIf<sf::Event::KeyPressed>()) {
+                if (key->scancode == sf::Keyboard::Scancode::Escape) window.close();
+            }
+
+            // --- MANEJO DEL CICLO DE VIDA EN ANDROID ---
+            if (event->is<sf::Event::FocusLost>()) appActive = false;
+            if (event->is<sf::Event::FocusGained>()) appActive = true;
+
+            if (const auto* resized = event->getIf<sf::Event::Resized>()) {
+                sf::FloatRect visibleArea({0.f, 0.f}, sf::Vector2f(resized->size));
                 window.setView(sf::View(visibleArea));
             }
         }
@@ -404,31 +408,31 @@ int main()
         // SISTEMA DE PICKING Y GIZMOS (MOVE, ROTATE, SCALE x4)
         // ==========================================
 ImGuiIO& io = ImGui::GetIO();
-        
+
         // 1. Leemos la verdad absoluta desde SFML, no desde ImGui
         sf::Vector2u winSize = window.getSize();
-        
+
         // EL FIX DEFINITIVO: Obligamos a la cámara de SFML a calzar 1:1 con la ventana física CADA FRAME.
         // Esto mata cualquier estiramiento o recorte que haga el SO por atrás.
-        window.setView(sf::View(sf::FloatRect(0.0f, 0.0f, (float)winSize.x, (float)winSize.y)));
+        window.setView(sf::View(sf::FloatRect({0.0f, 0.0f}, {(float)winSize.x, (float)winSize.y})));
 
         float screenWidth = (float)winSize.x;
         float screenHeight = (float)winSize.y;
         isMobile = (screenWidth < 800.0f); // Refresco dinámico
 
-        float leftPanelWidth = isMobile ? screenWidth : screenWidth * 0.15f; 
+        float leftPanelWidth = isMobile ? screenWidth : screenWidth * 0.15f;
         float rightPanelWidth = isMobile ? screenWidth : screenWidth * 0.20f;
-        float toolbarHeight = isMobile ? 80.0f : 65.0f; 
+        float toolbarHeight = isMobile ? 80.0f : 65.0f;
 
         // MAGIA ANTI-CORTE: 20 píxeles de margen (padding) para que el SO no te coma la pared 0
         float safePadding = 20.0f;
-        
+
         float availableWidth = (isMobile ? screenWidth : (screenWidth - leftPanelWidth - rightPanelWidth)) - (safePadding * 2.0f);
         float availableHeight = screenHeight - toolbarHeight - (safePadding * 2.0f);
 
         // Escalar manteniendo el Aspect Ratio exacto
         float scaleBase = std::min(availableWidth / RENDER_WIDTH, availableHeight / RENDER_HEIGHT);
-        
+
         // Calculamos el offset final empujándolo con el safePadding
         float offsetX = (isMobile ? 0.0f : leftPanelWidth) + safePadding + (availableWidth - (RENDER_WIDTH * scaleBase)) / 2.0f;
         float offsetY = toolbarHeight + safePadding + (availableHeight - (RENDER_HEIGHT * scaleBase)) / 2.0f;
@@ -449,7 +453,7 @@ ImGuiIO& io = ImGui::GetIO();
             b2Vec2 mouseB2(box2dX, box2dY);
 
             // Tolerancias dinámicas para dedos (móvil) o mouse (PC)
-            float gizmoTolerance = isMobile ? 3.0f : 1.2f; 
+            float gizmoTolerance = isMobile ? 3.0f : 1.2f;
             float movePadding = isMobile ? 2.0f : 0.8f;
 
             auto toGlobal = [&](b2Vec2 local, b2Vec2 objPos, float angle) -> b2Vec2 {
@@ -484,16 +488,16 @@ ImGuiIO& io = ImGui::GetIO();
                     if ((mouseB2 - rotHandleGlobal).Length() < gizmoTolerance) {
                         isHoveringRotate = true;
                     } else {
-                        float minDist = gizmoTolerance; 
+                        float minDist = gizmoTolerance;
                         for (int c = 0; c < 4; c++) {
                             float dist = (mouseB2 - corners[c]).Length();
-                            if (dist < minDist) { 
-                                hoveredScaleCorner = c; 
-                                minDist = dist; 
+                            if (dist < minDist) {
+                                hoveredScaleCorner = c;
+                                minDist = dist;
                             }
                         }
                     }
-                } 
+                }
                 else if (selectedType == EntityType::WinZone) {
                     float wzW = physics.winZoneSize[0];
                     float wzH = physics.winZoneSize[1];
@@ -508,9 +512,9 @@ ImGuiIO& io = ImGui::GetIO();
                     float minDist = gizmoTolerance;
                     for (int c = 0; c < 4; c++) {
                         float dist = (mouseB2 - corners[c]).Length();
-                        if (dist < minDist) { 
-                            hoveredScaleCorner = c; 
-                            minDist = dist; 
+                        if (dist < minDist) {
+                            hoveredScaleCorner = c;
+                            minDist = dist;
                         }
                     }
                 }
@@ -523,10 +527,10 @@ ImGuiIO& io = ImGui::GetIO();
                     } else if (selectedType == EntityType::Wall && selectedIndex >= 0 && selectedIndex < physics.getCustomWalls().size()) {
                         if (pointInWall(mouseB2, physics.getCustomWalls()[selectedIndex], movePadding)) isHoveringMove = true;
                     } else if (selectedType == EntityType::WinZone) {
-                        if (std::abs(mouseB2.x - physics.winZonePos[0]) <= physics.winZoneSize[0]/2.0f + movePadding && 
+                        if (std::abs(mouseB2.x - physics.winZonePos[0]) <= physics.winZoneSize[0]/2.0f + movePadding &&
                             std::abs(mouseB2.y - physics.winZonePos[1]) <= physics.winZoneSize[1]/2.0f + movePadding) isHoveringMove = true;
                     }
-                    
+
                     // Si no está arriba del seleccionado, chequeamos el resto de forma más ajustada
                     if (!isHoveringMove) {
                         for (int i = 0; i < bodies.size(); ++i) {
@@ -555,7 +559,7 @@ ImGuiIO& io = ImGui::GetIO();
             if (ptr.state == PointerState::Pressed) {
                 if (currentGizmo == GizmoState::None) {
                     bool handleClicked = false;
-                    
+
                     // 1. Chequeamos si tocamos un Gizmo activo del objeto seleccionado
                     if (selectedType == EntityType::Wall && selectedIndex >= 0) {
                         CustomWall& w = physics.getCustomWalls()[selectedIndex];
@@ -592,7 +596,7 @@ ImGuiIO& io = ImGui::GetIO();
 
                         if (clickedRacer != -1) {
                             selectedType = EntityType::Racers;
-                            selectedIndex = clickedRacer; 
+                            selectedIndex = clickedRacer;
                             currentGizmo = GizmoState::Moving;
                             dragOffset = mouseB2 - bodies[clickedRacer]->GetPosition();
                         } else {
@@ -614,7 +618,7 @@ ImGuiIO& io = ImGui::GetIO();
                                 currentGizmo = GizmoState::Moving;
                                 b2Vec2 objPos = physics.getCustomWalls()[clickedWall].body->GetPosition();
                                 dragOffset = b2Vec2(box2dX - objPos.x, box2dY - objPos.y);
-                            } else if (std::abs(mouseB2.x - physics.winZonePos[0]) <= physics.winZoneSize[0]/2.0f + movePadding && 
+                            } else if (std::abs(mouseB2.x - physics.winZonePos[0]) <= physics.winZoneSize[0]/2.0f + movePadding &&
                                        std::abs(mouseB2.y - physics.winZonePos[1]) <= physics.winZoneSize[1]/2.0f + movePadding) {
                                 selectedType = EntityType::WinZone;
                                 currentGizmo = GizmoState::Moving;
@@ -625,7 +629,7 @@ ImGuiIO& io = ImGui::GetIO();
                             }
                         }
                     }
-                } 
+                }
             } else if (ptr.state == PointerState::Held) {
                 // --- FASE DE ARRASTRE ---
                 if (currentGizmo == GizmoState::Moving) {
@@ -633,11 +637,11 @@ ImGuiIO& io = ImGui::GetIO();
                         CustomWall& w = physics.getCustomWalls()[selectedIndex];
                         w.body->SetTransform(b2Vec2(box2dX - dragOffset.x, box2dY - dragOffset.y), w.rotation);
                         w.body->SetAwake(true);
-                    } 
+                    }
                     else if (selectedType == EntityType::Racers && selectedIndex >= 0) {
                         b2Body* b = bodies[selectedIndex];
                         b->SetTransform(b2Vec2(box2dX - dragOffset.x, box2dY - dragOffset.y), b->GetAngle());
-                        b->SetLinearVelocity(b2Vec2(0.0f, 0.0f)); 
+                        b->SetLinearVelocity(b2Vec2(0.0f, 0.0f));
                         b->SetAwake(true);
                     }
                     else if (selectedType == EntityType::WinZone) {
@@ -645,7 +649,7 @@ ImGuiIO& io = ImGui::GetIO();
                         physics.winZonePos[1] = box2dY - dragOffset.y;
                         physics.updateWinZone(physics.winZonePos[0], physics.winZonePos[1], physics.winZoneSize[0], physics.winZoneSize[1]);
                     }
-                } 
+                }
                 else if (currentGizmo == GizmoState::Rotating && selectedType == EntityType::Wall && selectedIndex >= 0) {
                     CustomWall& w = physics.getCustomWalls()[selectedIndex];
                     float currentMouseAngle = std::atan2(mouseB2.y - w.body->GetPosition().y, mouseB2.x - w.body->GetPosition().x);
@@ -674,9 +678,9 @@ ImGuiIO& io = ImGui::GetIO();
 
                         physics.updateCustomWall(selectedIndex, newCenterGlobal.x, newCenterGlobal.y, newW, newH, w.soundID, w.shapeType, w.rotation);
                         w.body->SetAwake(true);
-                    } 
+                    }
                     else if (selectedType == EntityType::WinZone) {
-                        b2Vec2 currentMouseLocal = mouseB2 - initialPos; 
+                        b2Vec2 currentMouseLocal = mouseB2 - initialPos;
                         deltaX = currentMouseLocal.x - initialMouseLocal.x;
                         deltaY = currentMouseLocal.y - initialMouseLocal.y;
 
@@ -703,13 +707,13 @@ ImGuiIO& io = ImGui::GetIO();
 
 sf::Time dt = clock.restart();
         float dtSec = dt.asSeconds();
-        
+
         float timeStep = 1.0f / (float)simFPS; // Paso dinámico para tiempo real
 
         if (recorder && recorder->isRecording) {
             // Override absoluto: Clavamos el tiempo a la frecuencia de grabación
             dtSec = 1.0f / (float)recordFPS;
-            timeStep = dtSec; 
+            timeStep = dtSec;
         }
 
         physics.updateWallVisuals(dtSec);
@@ -741,23 +745,23 @@ if (!physics.isPaused) {
                 if (i >= trails.size()) break;
                 b2Vec2 pos = bodies[i]->GetPosition();
                 sf::Vector2f p(pos.x * physics.SCALE, pos.y * physics.SCALE);
-                
+
                 float speed = bodies[i]->GetLinearVelocity().Length();
                 float targetDuration = (((speed * 1.5f) + 5.0f) / 60.0f) * 0.8f;
                 trails[i].currentDuration = targetDuration; // Guardamos para el render
-                
+
                 // SUBDIVISIÓN GEOMÉTRICA: Si hay poca densidad (bajos FPS) y mucha distancia,
                 // metemos vértices extra para que nunca se vea "tosca o cuadrada".
                 if (!trails[i].points.empty()) {
                     sf::Vector2f lastP = trails[i].points.front().pos;
                     float lastTime = trails[i].points.front().time;
-                    
+
                     float dx = p.x - lastP.x;
                     float dy = p.y - lastP.y;
                     float dist = std::sqrt(dx*dx + dy*dy);
-                    
+
                     int segments = (int)(dist / 6.0f) + 1; // Un vértice cada 6 píxeles máximo
-                    if (segments > 1 && segments < 20) { 
+                    if (segments > 1 && segments < 20) {
                         for (int k = 1; k < segments; ++k) {
                             float t = (float)k / (float)segments;
                             sf::Vector2f interpP = lastP + sf::Vector2f(dx * t, dy * t);
@@ -766,10 +770,10 @@ if (!physics.isPaused) {
                         }
                     }
                 }
-                
+
                 // Agregamos el punto original del frame
                 trails[i].points.push_front({p, globalTime});
-                
+
                 // Limpieza por tiempo real
                 while (!trails[i].points.empty() && (globalTime - trails[i].points.back().time) > targetDuration) {
                     trails[i].points.pop_back();
@@ -785,7 +789,7 @@ if (!physics.isPaused) {
             victoryTimer += dtSec;
             if (victoryTimer >= VICTORY_DELAY) {
                 std::cout << ">>> CLOSING SIMULATION." << std::endl;
-                if (recorder) recorder->stop(); 
+                if (recorder) recorder->stop();
                 window.close();
             }
         }
@@ -810,7 +814,7 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(0.0f, 0.8f, 0.8f));
             if (ImGui::Button("STOP REC", ImVec2(100, isMobile ? 45 : 35))) {
                 recorder->stop();
-                recorder.reset(); 
+                recorder.reset();
             }
             ImGui::PopStyleColor(3);
         } else {
@@ -829,8 +833,8 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
             ImGui::PopStyleColor(3);
         }
 
-        if (!isMobile) ImGui::SameLine(); 
-        
+        if (!isMobile) ImGui::SameLine();
+
         // CONTROLES DE FPS
         ImGui::SetNextItemWidth(100);
         if (ImGui::SliderInt("Sim FPS", &simFPS, 30, 240)) window.setFramerateLimit(simFPS);
@@ -851,8 +855,8 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
         if (ImGui::Button("RESET RACE", ImVec2(100, isMobile ? 45 : 35))) {
             physics.resetRacers();
             for(auto& t : trails) t.points.clear();
-            victoryTimer = 0.0f; 
-            victorySequenceStarted = false; 
+            victoryTimer = 0.0f;
+            victorySequenceStarted = false;
         }
 
         if (!isMobile) ImGui::SameLine();
@@ -926,7 +930,7 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                 selectedIndex = i;
             }
         }
-        
+
         ImGui::End();
 
         // 3. INSPECTOR (Panel Derecho, de arriba a abajo)
@@ -939,12 +943,12 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
 
         if (selectedType == EntityType::None) {
             ImGui::TextDisabled("Select an object\nin the Hierarchy.");
-        } 
+        }
         else if (selectedType == EntityType::Global) {
             ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1), "MAP SYSTEM");
             ImGui::SetNextItemWidth(-1);
             ImGui::InputText("##Filename", mapFilename, IM_ARRAYSIZE(mapFilename));
-#ifndef __ANDROID__   
+#ifndef __ANDROID__
             if (ImGui::Button("SAVE MAP", ImVec2(-1, 30))) physics.saveMap(mapFilename);
 #endif
             if (ImGui::Button("LOAD MAP", ImVec2(-1, 30))) {
@@ -959,8 +963,8 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
             ImGui::Checkbox("Stop on First Win", &physics.stopOnFirstWin);
             ImGui::DragFloat("Finish Delay (s)", &physics.finishDelay, 0.05f, 0.0f, 2.0f);
 
-            
-            
+
+
             ImGui::Checkbox("Chaos Mode", &physics.enableChaos);
             if (physics.enableChaos) {
                 ImGui::Indent();
@@ -975,20 +979,20 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
             updateZone |= ImGui::DragFloat2("Pos", physics.winZonePos, 0.1f);
             updateZone |= ImGui::DragFloat2("Size", physics.winZoneSize, 0.1f);
             if (updateZone) physics.updateWinZone(physics.winZonePos[0], physics.winZonePos[1], physics.winZoneSize[0], physics.winZoneSize[1]);
-            
+
             ImGui::Checkbox("Enable Neon Pulse (Glow)", &physics.winZoneGlow);
         }
         else if (selectedType == EntityType::Knife) {
             if (selectedIndex >= 0 && selectedIndex < physics.getKnives().size()) {
                 auto& k = physics.getKnives()[selectedIndex];
-                
+
                 ImGui::TextColored(ImVec4(1, 0.2f, 0.2f, 1), "KNIFE %d", selectedIndex);
-                
+
                 float pos[2] = { k.initialPos.x, k.initialPos.y };
                 if (ImGui::DragFloat2("Position", pos, 0.1f)) {
                     physics.updateKnifePos(selectedIndex, pos[0], pos[1]);
                 }
-                
+
                 if (k.isPickedUp) {
                     ImGui::TextDisabled("Currently held by Racer %d", k.ownerIndex);
                 } else {
@@ -997,7 +1001,7 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
 
                 ImGui::Separator();
                 ImGui::Spacing();
-                
+
                 ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(0.0f, 0.6f, 0.6f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(0.0f, 0.7f, 0.7f));
                 if (ImGui::Button("DELETE KNIFE", ImVec2(-1, 30))) {
@@ -1040,13 +1044,13 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
         else if (selectedType == EntityType::Wall) {
             if (selectedIndex >= 0 && selectedIndex < physics.getCustomWalls().size()) {
                 CustomWall& w = physics.getCustomWalls()[selectedIndex];
-                
+
                 ImGui::TextColored(ImVec4(1, 0.5f, 0, 1), "WALL %d", selectedIndex);
-                
+
                 float pos[2] = { w.body->GetPosition().x, w.body->GetPosition().y };
                 float size[2] = { w.width, w.height };
                 int snd = w.soundID;
-                
+
                 bool changed = false;
                 changed |= ImGui::DragFloat2("Position", pos, 0.1f);
                 changed |= ImGui::DragFloat2("Size", size, 0.1f, 0.5f, 30.0f);
@@ -1055,7 +1059,7 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                 // --- CONTROL DE CAPAS Y ESTILO INDEPENDIENTE ---
                 ImGui::Separator();
                 ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "RENDER LAYER & STYLE");
-                
+
                 ImGui::InputInt("Z-Index Layer", &w.zIndex, 1, 5);
 
                 // El checkbox para matar el borde a esta pared específica
@@ -1072,13 +1076,13 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                     int oldMax = w.maxHits;
                     if (ImGui::SliderInt("Max Hits", &w.maxHits, 1, 200)) {
                         // FIX LÓGICO: Si alteramos el máximo, ajustamos la vida actual en caliente.
-                        if (w.currentHits == oldMax) w.currentHits = w.maxHits; 
+                        if (w.currentHits == oldMax) w.currentHits = w.maxHits;
                         else if (w.currentHits > w.maxHits) w.currentHits = w.maxHits;
                     }
-                    
+
                     // Slider explícito de vida para control total
                     ImGui::SliderInt("Current Hits", &w.currentHits, 1, w.maxHits);
-                    
+
                     // --- NUEVO: TOGGLE TEXTO / LEDS ---
                     ImGui::Checkbox("Use Text for HP (Instead of LEDs)", &w.useTextForHP);
 
@@ -1087,28 +1091,28 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                     ImGui::ProgressBar(healthPct, ImVec2(-1, 0), hpOverlay.c_str());
                     ImGui::Unindent();
                 }
-                
+
                 if (changed) physics.updateCustomWall(selectedIndex, pos[0], pos[1], size[0], size[1], snd, w.shapeType, w.rotation);
 
                 ImGui::Separator();
 // --- GEOMETRÍA ---
                 if (ImGui::CollapsingHeader("Geometry", ImGuiTreeNodeFlags_DefaultOpen)) {
                     int sType = w.shapeType;
-                    float rotDeg = w.rotation * 180.0f / 3.14159f; 
+                    float rotDeg = w.rotation * 180.0f / 3.14159f;
                     bool geoChanged = false;
 
                     if (ImGui::RadioButton("Box", sType == 0)) { sType = 0; geoChanged = true; } ImGui::SameLine();
                     if (ImGui::RadioButton("Spike", sType == 1)) { sType = 1; geoChanged = true; w.isDeadly = true; }
 
                     if (ImGui::SliderFloat("Rotation", &rotDeg, 0.0f, 360.0f, "%.0f deg")) geoChanged = true;
-                    
+
                     // Botones de rotación rápida alineados prolijamente
                     if (ImGui::Button("0°", ImVec2(40,0))) { rotDeg = 0.0f; geoChanged = true; } ImGui::SameLine();
                     if (ImGui::Button("90°", ImVec2(40,0))) { rotDeg = 90.0f; geoChanged = true; } ImGui::SameLine();
                     if (ImGui::Button("180°", ImVec2(45,0))) { rotDeg = 180.0f; geoChanged = true; } ImGui::SameLine();
                     if (ImGui::Button("270°", ImVec2(45,0))) { rotDeg = 270.0f; geoChanged = true; }
 
-                    if (geoChanged || changed) { 
+                    if (geoChanged || changed) {
                         float rotRad = rotDeg * 3.14159f / 180.0f;
                         physics.updateCustomWall(selectedIndex, pos[0], pos[1], size[0], size[1], snd, sType, rotRad);
                     }
@@ -1131,9 +1135,9 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                 }
 
                 ImGui::Separator();
-                ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "DANGER ZONE"); 
+                ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "DANGER ZONE");
                 if (ImGui::Checkbox("IS DEADLY (Spike)", &w.isDeadly)) {
-                    if (w.isDeadly) physics.updateWallColor(selectedIndex, 5); 
+                    if (w.isDeadly) physics.updateWallColor(selectedIndex, 5);
                 }
 
                 ImGui::Separator();
@@ -1161,7 +1165,7 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                             w.body->SetType(b2_kinematicBody);
                         } else {
                             w.body->SetType(b2_staticBody);
-                            w.body->SetLinearVelocity(b2Vec2(0.0f, 0.0f)); 
+                            w.body->SetLinearVelocity(b2Vec2(0.0f, 0.0f));
                         }
                     }
 
@@ -1169,12 +1173,12 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                         ImGui::Indent();
                         float pA[2] = { w.pointA.x, w.pointA.y };
                         if (ImGui::DragFloat2("Point A", pA, 0.1f)) w.pointA.Set(pA[0], pA[1]);
-                        
+
                         float pB[2] = { w.pointB.x, w.pointB.y };
                         if (ImGui::DragFloat2("Point B", pB, 0.1f)) w.pointB.Set(pB[0], pB[1]);
-                        
+
                         ImGui::DragFloat("Speed", &w.moveSpeed, 0.1f, 0.1f, 50.0f);
-                        
+
                         if (ImGui::Button("Set A = Current", ImVec2(-1, 0))) w.pointA = w.body->GetPosition();
                         if (ImGui::Button("Set B = Current", ImVec2(-1, 0))) w.pointB = w.body->GetPosition();
 
@@ -1183,7 +1187,7 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                             ImGui::Checkbox("Free Bounce", &w.freeBounce);
                             if (w.isFreeBouncing && ImGui::Button("Reset Route")) {
                                 w.isFreeBouncing = false;
-                                w.body->SetLinearVelocity(b2Vec2(0.0f, 0.0f)); 
+                                w.body->SetLinearVelocity(b2Vec2(0.0f, 0.0f));
                             }
                         }
                         ImGui::Unindent();
@@ -1221,37 +1225,39 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
         // --- DRAW: RENDERIZADO AL BUFFER GIGANTE ---
         // ==============================================
         // 1. Limpiar con el color de vacío
-        gameBuffer.clear(sf::Color(30, 30, 30)); 
+        gameBuffer.clear(sf::Color(30, 30, 30));
 
         // 2. Dibujar Polvo Atmosférico con movimiento energético
-        sf::VertexArray dustVA(sf::Quads, ambientDust.size() * 4);
+        sf::VertexArray dustVA(sf::PrimitiveType::Triangles, ambientDust.size() * 6);
         for(size_t i = 0; i < ambientDust.size(); ++i) {
             auto& p = ambientDust[i];
-            
+
             if (!physics.isPaused || (recorder && recorder->isRecording)) {
                 p.yPos += p.speedY * dtSec;
-                if (p.yPos < -50.0f) { 
+                if (p.yPos < -50.0f) {
                     p.yPos = RENDER_HEIGHT + 50.0f;
-                    p.basePos.x = (float)(std::rand() % RENDER_WIDTH); 
+                    p.basePos.x = (float)(std::rand() % RENDER_WIDTH);
                 }
             }
-            
+
             float currentX = p.basePos.x + std::sin(globalTime * p.phaseSpeed + p.phaseOffset) * p.amplitude;
             float s = p.size;
-            
-            dustVA[i*4 + 0].position = sf::Vector2f(currentX - s, p.yPos - s);
-            dustVA[i*4 + 1].position = sf::Vector2f(currentX + s, p.yPos - s);
-            dustVA[i*4 + 2].position = sf::Vector2f(currentX + s, p.yPos + s);
-            dustVA[i*4 + 3].position = sf::Vector2f(currentX - s, p.yPos + s);
-            
-            dustVA[i*4 + 0].color = p.color;
-            dustVA[i*4 + 1].color = p.color;
-            dustVA[i*4 + 2].color = p.color;
-            dustVA[i*4 + 3].color = p.color;
+
+            sf::Vector2f tl(currentX - s, p.yPos - s);
+            sf::Vector2f tr(currentX + s, p.yPos - s);
+            sf::Vector2f br(currentX + s, p.yPos + s);
+            sf::Vector2f bl(currentX - s, p.yPos + s);
+
+            dustVA[i*6 + 0] = sf::Vertex{tl, p.color};
+            dustVA[i*6 + 1] = sf::Vertex{tr, p.color};
+            dustVA[i*6 + 2] = sf::Vertex{br, p.color};
+            dustVA[i*6 + 3] = sf::Vertex{br, p.color};
+            dustVA[i*6 + 4] = sf::Vertex{bl, p.color};
+            dustVA[i*6 + 5] = sf::Vertex{tl, p.color};
         }
 
         sf::RenderStates dustStates;
-        dustStates.blendMode = sf::BlendAdd; 
+        dustStates.blendMode = sf::BlendAdd;
         gameBuffer.draw(dustVA, dustStates);
 
         // 3. Dibujar la grilla encima
@@ -1262,7 +1268,7 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
         // --- SISTEMA DE CAPAS (Z-INDEX LOOP) ---
         // ==============================================
         const auto& customWalls = physics.getCustomWalls();
-        
+
         // Calculamos los extremos del bucle dinámicamente
         int minLayer = -1; // Nos aseguramos que al menos pase por el -1
         int maxLayer = -1;
@@ -1272,12 +1278,12 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
         }
 
         for (int currentLayer = minLayer; currentLayer <= maxLayer; ++currentLayer) {
-            
+
             // ------------------------------------------
             // CAPA -1: ENTIDADES Y SIMULACIÓN BASE
             // ------------------------------------------
             if (currentLayer == -1) {
-                
+
                 // --- A) WINZONE ---
                 b2Body* zone = physics.getWinZoneBody();
                 if (zone) {
@@ -1285,19 +1291,19 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                     sf::RectangleShape zoneRect;
                     float w = physics.winZoneSize[0] * physics.SCALE;
                     float h = physics.winZoneSize[1] * physics.SCALE;
-                    
-                    float alpha = 100.0f; 
+
+                    float alpha = 100.0f;
                     if (physics.winZoneGlow) {
-                        float pulse = (std::sin(globalTime * 1.5f) + 1.0f) * 0.5f; 
-                        alpha = 50.0f + pulse * 100.0f; 
+                        float pulse = (std::sin(globalTime * 1.5f) + 1.0f) * 0.5f;
+                        alpha = 50.0f + pulse * 100.0f;
                     }
-                    
-                    zoneRect.setSize(sf::Vector2f(w, h));
-                    zoneRect.setOrigin(w/2.0f, h/2.0f);
-                    zoneRect.setPosition(pos.x * physics.SCALE, pos.y * physics.SCALE);
-                    zoneRect.setFillColor(sf::Color(255, 215, 0, (sf::Uint8)alpha)); 
+
+                    zoneRect.setSize({w, h});
+                    zoneRect.setOrigin({w/2.0f, h/2.0f});
+                    zoneRect.setPosition({pos.x * physics.SCALE, pos.y * physics.SCALE});
+                    zoneRect.setFillColor(sf::Color(255, 215, 0, (std::uint8_t)alpha));
                     zoneRect.setOutlineColor(sf::Color::Yellow);
-                    zoneRect.setOutlineThickness(0.1f * physics.SCALE); 
+                    zoneRect.setOutlineThickness(0.1f * physics.SCALE);
                     gameBuffer.draw(zoneRect);
                 }
 
@@ -1305,11 +1311,11 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                 for (const auto& knife : physics.getKnives()) {
                     sf::Vector2f drawPos;
                     float drawRot;
-                    float kScale = 1.5f * physics.SCALE; 
+                    float kScale = 1.5f * physics.SCALE;
 
                     if (!knife.isPickedUp) {
                         drawPos = sf::Vector2f(knife.body->GetPosition().x * physics.SCALE, knife.body->GetPosition().y * physics.SCALE);
-                        drawRot = knife.body->GetAngle() * 180.0f / 3.14159f; 
+                        drawRot = knife.body->GetAngle() * 180.0f / 3.14159f;
                     } else {
                         int oIdx = knife.ownerIndex;
                         if (oIdx >= 0 && oIdx < bodies.size()) {
@@ -1317,33 +1323,33 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                             b2Vec2 oPos = ownerBody->GetPosition();
                             float oAngle = ownerBody->GetAngle();
 
-                            float rSize = physics.currentRacerSize / 2.0f; 
+                            float rSize = physics.currentRacerSize / 2.0f;
                             b2Vec2 offset(cos(oAngle) * (rSize + 0.3f), sin(oAngle) * (rSize + 0.3f));
-                            
+
                             drawPos = sf::Vector2f((oPos.x + offset.x) * physics.SCALE, (oPos.y + offset.y) * physics.SCALE);
-                            drawRot = oAngle * 180.0f / 3.14159f; 
+                            drawRot = oAngle * 180.0f / 3.14159f;
                         } else {
-                            continue; 
+                            continue;
                         }
                     }
 
                     if (hasKnifeTex) {
                         sf::Sprite s(knifeTex);
-                        s.setOrigin(knifeTex.getSize().x / 2.0f, knifeTex.getSize().y / 2.0f);
+                        s.setOrigin({(float)knifeTex.getSize().x / 2.0f, (float)knifeTex.getSize().y / 2.0f});
                         float scaleFactor = kScale / knifeTex.getSize().x;
-                        s.setScale(-scaleFactor, scaleFactor);
+                        s.setScale({-scaleFactor, scaleFactor});
                         s.setPosition(drawPos);
-                        s.setRotation(drawRot);
+                        s.setRotation(sf::degrees(drawRot));
                         gameBuffer.draw(s);
                     } else {
                         sf::ConvexShape tri;
                         tri.setPointCount(3);
-                        float triSize = kScale * 0.6f; 
-                        tri.setPoint(0, sf::Vector2f(0.0f, -triSize));
-                        tri.setPoint(1, sf::Vector2f(triSize/2.0f, triSize/2.0f));
-                        tri.setPoint(2, sf::Vector2f(-triSize/2.0f, triSize/2.0f));
+                        float triSize = kScale * 0.6f;
+                        tri.setPoint(0, {0.0f, -triSize});
+                        tri.setPoint(1, {triSize/2.0f, triSize/2.0f});
+                        tri.setPoint(2, {-triSize/2.0f, triSize/2.0f});
                         tri.setPosition(drawPos);
-                        tri.setRotation(drawRot + 90.0f); 
+                        tri.setRotation(sf::degrees(drawRot + 90.0f));
                         tri.setFillColor(sf::Color(220, 220, 220));
                         tri.setOutlineColor(sf::Color::Red);
                         tri.setOutlineThickness(2.0f);
@@ -1353,8 +1359,8 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
 
                 // --- C) TUMBAS ---
                 const auto& statuses = physics.getRacerStatus();
-                float tombSize = 0.8f * physics.SCALE;  
-                float crossThick = 0.15f * physics.SCALE; 
+                float tombSize = 0.8f * physics.SCALE;
+                float crossThick = 0.15f * physics.SCALE;
                 float outlineThick = 0.08f * physics.SCALE;
 
                 for (size_t i = 0; i < statuses.size(); ++i) {
@@ -1365,26 +1371,26 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                         sf::Color deathColor = (i < 4) ? racerColors[i] : sf::Color::White;
 
                         sf::RectangleShape grave;
-                        grave.setSize(sf::Vector2f(tombSize, tombSize));
-                        grave.setOrigin(tombSize / 2.0f, tombSize / 2.0f);
-                        grave.setPosition(px, py);
-                        grave.setFillColor(sf::Color(20, 20, 20, 240)); 
-                        grave.setOutlineColor(deathColor);              
+                        grave.setSize({tombSize, tombSize});
+                        grave.setOrigin({tombSize / 2.0f, tombSize / 2.0f});
+                        grave.setPosition({px, py});
+                        grave.setFillColor(sf::Color(20, 20, 20, 240));
+                        grave.setOutlineColor(deathColor);
                         grave.setOutlineThickness(outlineThick);
-                        gameBuffer.draw(grave); 
-                    
-                        float crossLen = tombSize * 0.8f;      
-                        sf::RectangleShape bar1(sf::Vector2f(crossLen, crossThick));
-                        sf::RectangleShape bar2(sf::Vector2f(crossLen, crossThick));
-                        bar1.setOrigin(crossLen / 2.0f, crossThick / 2.0f);
-                        bar2.setOrigin(crossLen / 2.0f, crossThick / 2.0f);
-                        bar1.setPosition(px, py);
-                        bar2.setPosition(px, py);
-                        bar1.setRotation(45.0f);
-                        bar2.setRotation(-45.0f);
-                        bar1.setFillColor(deathColor); 
+                        gameBuffer.draw(grave);
+
+                        float crossLen = tombSize * 0.8f;
+                        sf::RectangleShape bar1({crossLen, crossThick});
+                        sf::RectangleShape bar2({crossLen, crossThick});
+                        bar1.setOrigin({crossLen / 2.0f, crossThick / 2.0f});
+                        bar2.setOrigin({crossLen / 2.0f, crossThick / 2.0f});
+                        bar1.setPosition({px, py});
+                        bar2.setPosition({px, py});
+                        bar1.setRotation(sf::degrees(45.0f));
+                        bar2.setRotation(sf::degrees(-45.0f));
+                        bar1.setFillColor(deathColor);
                         bar2.setFillColor(deathColor);
-                        gameBuffer.draw(bar1); 
+                        gameBuffer.draw(bar1);
                         gameBuffer.draw(bar2);
                     }
                 }
@@ -1392,16 +1398,16 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                 // --- D) TRAILS ---
                 for (size_t i = 0; i < trails.size(); ++i) {
                     const auto& pts = trails[i].points;
-                    if (pts.size() < 2) continue; 
+                    if (pts.size() < 2) continue;
 
-                    sf::VertexArray glowVA(sf::Quads);
-                    sf::VertexArray coreVA(sf::Quads);
-                    float baseWidth = physics.currentRacerSize * physics.SCALE; 
+                    sf::VertexArray glowVA(sf::PrimitiveType::Triangles);
+                    sf::VertexArray coreVA(sf::PrimitiveType::Triangles);
+                    float baseWidth = physics.currentRacerSize * physics.SCALE;
 
 // Dentro del for de dibujado de estelas:
         for (size_t j = 1; j < pts.size(); ++j) {
             // Agregá ".pos" porque ahora es una estructura compuesta
-            sf::Vector2f p1 = pts[j-1].pos; 
+            sf::Vector2f p1 = pts[j-1].pos;
             sf::Vector2f p2 = pts[j].pos;
             // ... el resto de la matemática queda todo exactamente igual.
 
@@ -1430,17 +1436,17 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
 
                         auto getThermoColor = [&](float life, float alphaMult) -> sf::Color {
                             sf::Color c;
-                            if (life >= 0.8f) { 
+                            if (life >= 0.8f) {
                                 c = sf::Color(245, 245, 245);
-                            } else if (life >= 0.3f) { 
-                                float t = (life - 0.3f) / 0.5f; 
+                            } else if (life >= 0.3f) {
+                                float t = (life - 0.3f) / 0.5f;
                                 c = lerpColor(baseColor, sf::Color(245, 245, 245), t);
-                            } else { 
-                                float t = life / 0.3f; 
-                                sf::Color transparent(0, 0, 0, 0); 
+                            } else {
+                                float t = life / 0.3f;
+                                sf::Color transparent(0, 0, 0, 0);
                                 c = lerpColor(transparent, baseColor, t);
                             }
-                            c.a = (sf::Uint8)(c.a * alphaMult);
+                            c.a = (std::uint8_t)(c.a * alphaMult);
                             return c;
                         };
 
@@ -1459,15 +1465,21 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                         sf::Vector2f p1_ext = p1 - overlap;
                         sf::Vector2f p2_ext = p2 + overlap;
 
-                        coreVA.append(sf::Vertex(p1_ext + normal * coreW1, coreColor1));
-                        coreVA.append(sf::Vertex(p1_ext - normal * coreW1, coreColor1));
-                        coreVA.append(sf::Vertex(p2_ext - normal * coreW2, coreColor2));
-                        coreVA.append(sf::Vertex(p2_ext + normal * coreW2, coreColor2));
+            sf::Vertex c0{p1_ext + normal * coreW1, coreColor1};
+            sf::Vertex c1{p1_ext - normal * coreW1, coreColor1};
+            sf::Vertex c2{p2_ext - normal * coreW2, coreColor2};
+            sf::Vertex c3{p2_ext + normal * coreW2, coreColor2};
 
-                        glowVA.append(sf::Vertex(p1_ext + normal * glowW1, glowColor1));
-                        glowVA.append(sf::Vertex(p1_ext - normal * glowW1, glowColor1));
-                        glowVA.append(sf::Vertex(p2_ext - normal * glowW2, glowColor2));
-                        glowVA.append(sf::Vertex(p2_ext + normal * glowW2, glowColor2));
+            coreVA.append(c0); coreVA.append(c1); coreVA.append(c2);
+            coreVA.append(c2); coreVA.append(c3); coreVA.append(c0);
+
+            sf::Vertex g0{p1_ext + normal * glowW1, glowColor1};
+            sf::Vertex g1{p1_ext - normal * glowW1, glowColor1};
+            sf::Vertex g2{p2_ext - normal * glowW2, glowColor2};
+            sf::Vertex g3{p2_ext + normal * glowW2, glowColor2};
+
+            glowVA.append(g0); glowVA.append(g1); glowVA.append(g2);
+            glowVA.append(g2); glowVA.append(g3); glowVA.append(g0);
                     }
 
                     sf::RenderStates states;
@@ -1477,25 +1489,25 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                 }
 
                 // --- E) RACERS VIVOS ---
-                const auto& currentStatuses = physics.getRacerStatus(); 
+                const auto& currentStatuses = physics.getRacerStatus();
                 for (size_t i = 0; i < bodies.size(); ++i) {
                     if (i < currentStatuses.size() && !currentStatuses[i].isAlive) continue;
                     b2Body* body = bodies[i];
                     b2Vec2 pos = body->GetPosition();
                     float angle = body->GetAngle();
                     float drawSize = physics.currentRacerSize * physics.SCALE;
-                    
+
                     sf::RectangleShape rect;
-                    rect.setSize(sf::Vector2f(drawSize, drawSize));
-                    rect.setOrigin(drawSize / 2.0f, drawSize / 2.0f);
-                    rect.setPosition(pos.x * physics.SCALE, pos.y * physics.SCALE);
-                    rect.setRotation(angle * 180.0f / 3.14159f);
+                    rect.setSize({drawSize, drawSize});
+                    rect.setOrigin({drawSize / 2.0f, drawSize / 2.0f});
+                    rect.setPosition({pos.x * physics.SCALE, pos.y * physics.SCALE});
+                    rect.setRotation(sf::degrees(angle * 180.0f / 3.14159f));
                     if (i < 4) rect.setOutlineColor(racerColors[i]);
                     else rect.setOutlineColor(sf::Color::White);
-                    
+
                     rect.setFillColor(sf::Color::White);
                     rect.setOutlineThickness(-0.1f * physics.SCALE);
-                    gameBuffer.draw(rect); 
+                    gameBuffer.draw(rect);
                 }
             } // FIN CAPA -1
 
@@ -1508,24 +1520,24 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                 b2Vec2 pos = wall.body->GetPosition();
                 float wPx = wall.width * physics.SCALE;
                 float hPx = wall.height * physics.SCALE;
-                
+
                 sf::Shape* shapeToDraw = nullptr;
                 sf::RectangleShape rectShape;
                 sf::ConvexShape triShape;
 
                 if (wall.shapeType == 1) {
                     triShape.setPointCount(3);
-                    triShape.setPoint(0, sf::Vector2f(0.0f, -hPx / 2.0f));       
-                    triShape.setPoint(1, sf::Vector2f(wPx / 2.0f, hPx / 2.0f));  
-                    triShape.setPoint(2, sf::Vector2f(-wPx / 2.0f, hPx / 2.0f)); 
-                    triShape.setPosition(pos.x * physics.SCALE, pos.y * physics.SCALE);
-                    triShape.setRotation(wall.body->GetAngle() * 180.0f / 3.14159f);
+                    triShape.setPoint(0, {0.0f, -hPx / 2.0f});
+                    triShape.setPoint(1, {wPx / 2.0f, hPx / 2.0f});
+                    triShape.setPoint(2, {-wPx / 2.0f, hPx / 2.0f});
+                    triShape.setPosition({pos.x * physics.SCALE, pos.y * physics.SCALE});
+                    triShape.setRotation(sf::degrees(wall.body->GetAngle() * 180.0f / 3.14159f));
                     shapeToDraw = &triShape;
                 } else {
-                    rectShape.setSize(sf::Vector2f(wPx, hPx));
-                    rectShape.setOrigin(wPx / 2.0f, hPx / 2.0f);
-                    rectShape.setPosition(pos.x * physics.SCALE, pos.y * physics.SCALE);
-                    rectShape.setRotation(wall.body->GetAngle() * 180.0f / 3.14159f);
+                    rectShape.setSize({wPx, hPx});
+                    rectShape.setOrigin({wPx / 2.0f, hPx / 2.0f});
+                    rectShape.setPosition({pos.x * physics.SCALE, pos.y * physics.SCALE});
+                    rectShape.setRotation(sf::degrees(wall.body->GetAngle() * 180.0f / 3.14159f));
                     shapeToDraw = &rectShape;
                 }
 
@@ -1533,18 +1545,18 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                 sf::Color currentOutline = lerpColor(wall.neonColor, sf::Color::White, wall.flashTimer * 0.5f);
 
                 if (wall.isDeadly) {
-                    float dangerPulse = (std::sin(globalTime * 10.0f) + 1.0f) * 0.5f; 
-                    currentFill = sf::Color(100 + (dangerPulse * 50), 0, 0, 255); 
+                    float dangerPulse = (std::sin(globalTime * 10.0f) + 1.0f) * 0.5f;
+                    currentFill = sf::Color(100 + (dangerPulse * 50), 0, 0, 255);
                     currentOutline = sf::Color::Red;
                 }
 
-                shapeToDraw->setFillColor(currentFill); 
+                shapeToDraw->setFillColor(currentFill);
                 shapeToDraw->setOutlineColor(currentOutline);
-                
+
                 if (wall.borderSide != -1 || !wall.hasOutline) {
                     shapeToDraw->setOutlineThickness(0.0f);
                 } else {
-                    float baseThickness = 0.08f * physics.SCALE; 
+                    float baseThickness = 0.08f * physics.SCALE;
                     float thickness = baseThickness + (wall.flashTimer * baseThickness);
                     shapeToDraw->setOutlineThickness(-thickness);
                 }
@@ -1558,28 +1570,28 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
 
                     if (wall.currentHits < wall.maxHits) {
                         int damageLevel = wall.maxHits - wall.currentHits;
-                        int numCracks = std::min(damageLevel, 200); 
+                        int numCracks = std::min(damageLevel, 200);
                         std::srand((unsigned int)(reinterpret_cast<std::uintptr_t>(wall.body) & 0xFFFFFFFF));
-                        
+
                         auto drawCrackSegment = [&](float x1, float y1, float x2, float y2) {
                             float dx = x2 - x1;
                             float dy = y2 - y1;
                             float length = std::sqrt(dx*dx + dy*dy);
-                            if (length < 0.5f) return; 
-                            
+                            if (length < 0.5f) return;
+
                             float crackAngle = std::atan2(dy, dx) * 180.0f / 3.14159f;
-                            float crackThickness = std::max(4.0f, 0.036f * physics.SCALE); 
-                            
-                            sf::RectangleShape crackRect(sf::Vector2f(length, crackThickness));
-                            crackRect.setOrigin(0.0f, crackThickness / 2.0f);
-                            crackRect.setFillColor(sf::Color(10, 10, 10, 220)); 
+                            float crackThickness = std::max(4.0f, 0.036f * physics.SCALE);
+
+                            sf::RectangleShape crackRect({length, crackThickness});
+                            crackRect.setOrigin({0.0f, crackThickness / 2.0f});
+                            crackRect.setFillColor(sf::Color(10, 10, 10, 220));
 
                             sf::Transform t;
-                            t.translate(pos.x * physics.SCALE, pos.y * physics.SCALE);
-                            t.rotate(wall.body->GetAngle() * 180.0f / 3.14159f);
+                            t.translate({pos.x * physics.SCALE, pos.y * physics.SCALE});
+                            t.rotate(sf::degrees(wall.body->GetAngle() * 180.0f / 3.14159f));
 
-                            crackRect.setPosition(t.transformPoint(x1, y1));
-                            crackRect.setRotation((wall.body->GetAngle() * 180.0f / 3.14159f) + crackAngle);
+                            crackRect.setPosition(t.transformPoint({x1, y1}));
+                            crackRect.setRotation(sf::degrees((wall.body->GetAngle() * 180.0f / 3.14159f) + crackAngle));
                             gameBuffer.draw(crackRect);
                         };
 
@@ -1587,13 +1599,13 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                             float currentX = (std::rand() % (int)wPx) - halfW;
                             float currentY = (std::rand() % (int)hPx) - halfH;
                             float baseAngle = (std::rand() % 360) * 3.14159f / 180.0f;
-                            int segments = 2 + (std::rand() % 3); 
-                            
+                            int segments = 2 + (std::rand() % 3);
+
                             for (int s = 0; s < segments; s++) {
-                                float angle = baseAngle + ((std::rand() % 100) - 50) * 0.015f; 
+                                float angle = baseAngle + ((std::rand() % 100) - 50) * 0.015f;
                                 float maxDim = std::max(wPx, hPx);
-                                float segLen = maxDim * (0.05f + (std::rand() % 100) * 0.002f); 
-                                
+                                float segLen = maxDim * (0.05f + (std::rand() % 100) * 0.002f);
+
                                 float nextX = currentX + std::cos(angle) * segLen;
                                 float nextY = currentY + std::sin(angle) * segLen;
 
@@ -1606,29 +1618,28 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                                 currentY = nextY;
                             }
                         }
-                        std::srand(std::time(nullptr)); 
+                        std::srand(std::time(nullptr));
                     }
 
                     if (wall.useTextForHP) {
-                        sf::Text hitText;
-                        hitText.setFont(uiFont); 
+                        sf::Text hitText(uiFont);
                         hitText.setString(std::to_string(wall.currentHits));
-                        
+
                         float minDim = std::min(wPx, hPx);
                         unsigned int calcSize = (unsigned int)(minDim * 0.6f);
-                        if (calcSize < 12) calcSize = 12; 
-                        hitText.setCharacterSize(calcSize); 
-                        hitText.setFillColor(sf::Color(255, 255, 255, 140)); 
-                        
+                        if (calcSize < 12) calcSize = 12;
+                        hitText.setCharacterSize(calcSize);
+                        hitText.setFillColor(sf::Color(255, 255, 255, 140));
+
                         sf::FloatRect textRect = hitText.getLocalBounds();
-                        hitText.setOrigin(textRect.left + textRect.width / 2.0f, textRect.top + textRect.height / 2.0f);
-                        hitText.setPosition(pos.x * physics.SCALE, pos.y * physics.SCALE);
-                        
+                        hitText.setOrigin({textRect.position.x + textRect.size.x / 2.0f, textRect.position.y + textRect.size.y / 2.0f});
+                        hitText.setPosition({pos.x * physics.SCALE, pos.y * physics.SCALE});
+
                         float extraRotation = (hPx > wPx * 1.5f) ? 90.0f : 0.0f;
-                        hitText.setRotation(wall.body->GetAngle() * 180.0f / 3.14159f + extraRotation);
+                        hitText.setRotation(sf::degrees(wall.body->GetAngle() * 180.0f / 3.14159f + extraRotation));
                         gameBuffer.draw(hitText);
                     } else {
-                        float ledBaseSize = 0.30f * physics.SCALE; 
+                        float ledBaseSize = 0.30f * physics.SCALE;
                         float spacing = 0.12f * physics.SCALE;
                         bool vertical = (wPx < hPx);
                         float mainLength = vertical ? hPx : wPx;
@@ -1637,7 +1648,7 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                         if (totalWidth > mainLength * 0.85f) {
                             scaleDown = (mainLength * 0.85f) / totalWidth;
                         }
-                        
+
                         float ledSize = ledBaseSize * scaleDown;
                         float currentSpacing = spacing * scaleDown;
                         float adjustedTotalWidth = (wall.maxHits * ledSize) + ((wall.maxHits - 1) * currentSpacing);
@@ -1646,22 +1657,22 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
                         float startY = vertical ? (-adjustedTotalWidth / 2.0f + ledSize / 2.0f) : 0.0f;
 
                         sf::Transform t;
-                        t.translate(pos.x * physics.SCALE, pos.y * physics.SCALE);
-                        t.rotate(wall.body->GetAngle() * 180.0f / 3.14159f);
+                        t.translate({pos.x * physics.SCALE, pos.y * physics.SCALE});
+                        t.rotate(sf::degrees(wall.body->GetAngle() * 180.0f / 3.14159f));
 
                         for (int k = 0; k < wall.maxHits; k++) {
-                            sf::RectangleShape led(sf::Vector2f(ledSize, ledSize));
-                            led.setOrigin(ledSize / 2.0f, ledSize / 2.0f);
+                            sf::RectangleShape led({ledSize, ledSize});
+                            led.setOrigin({ledSize / 2.0f, ledSize / 2.0f});
                             float lx = vertical ? startX : (startX + k * (ledSize + currentSpacing));
                             float ly = vertical ? (startY + k * (ledSize + currentSpacing)) : startY;
 
-                            led.setPosition(t.transformPoint(lx, ly));
-                            led.setRotation(wall.body->GetAngle() * 180.0f / 3.14159f);
+                            led.setPosition(t.transformPoint({lx, ly}));
+                            led.setRotation(sf::degrees(wall.body->GetAngle() * 180.0f / 3.14159f));
 
                             if (k < wall.currentHits) {
-                                led.setFillColor(sf::Color(100, 255, 100, 220)); 
+                                led.setFillColor(sf::Color(100, 255, 100, 220));
                             } else {
-                                led.setFillColor(sf::Color(255, 50, 50, 100)); 
+                                led.setFillColor(sf::Color(255, 50, 50, 100));
                             }
                             gameBuffer.draw(led);
                         }
@@ -1675,23 +1686,25 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
         // ==============================================
         const auto& particles = physics.getParticles();
         if (!particles.empty()) {
-            sf::VertexArray va(sf::Quads, particles.size() * 4);
-            float pSize = (RENDER_WIDTH / 1080.0f) * 4.0f; 
-            
+            sf::VertexArray va(sf::PrimitiveType::Triangles, particles.size() * 6);
+            float pSize = (RENDER_WIDTH / 1080.0f) * 4.0f;
+
             for (size_t i = 0; i < particles.size(); ++i) {
                 const auto& p = particles[i];
                 sf::Color c = p.color;
-                c.a = (sf::Uint8)(255.0f * (p.life / p.maxLife));
-                
-                va[i*4 + 0].position = p.position + sf::Vector2f(-pSize, -pSize);
-                va[i*4 + 1].position = p.position + sf::Vector2f(pSize, -pSize);
-                va[i*4 + 2].position = p.position + sf::Vector2f(pSize, pSize);
-                va[i*4 + 3].position = p.position + sf::Vector2f(-pSize, pSize);
-                
-                va[i*4 + 0].color = c;
-                va[i*4 + 1].color = c;
-                va[i*4 + 2].color = c;
-                va[i*4 + 3].color = c;
+                c.a = (std::uint8_t)(255.0f * (p.life / p.maxLife));
+
+                sf::Vector2f tl = p.position + sf::Vector2f(-pSize, -pSize);
+                sf::Vector2f tr = p.position + sf::Vector2f(pSize, -pSize);
+                sf::Vector2f br = p.position + sf::Vector2f(pSize, pSize);
+                sf::Vector2f bl = p.position + sf::Vector2f(-pSize, pSize);
+
+                va[i*6 + 0] = sf::Vertex{tl, c};
+                va[i*6 + 1] = sf::Vertex{tr, c};
+                va[i*6 + 2] = sf::Vertex{br, c};
+                va[i*6 + 3] = sf::Vertex{br, c};
+                va[i*6 + 4] = sf::Vertex{bl, c};
+                va[i*6 + 5] = sf::Vertex{tl, c};
             }
             gameBuffer.draw(va);
         }
@@ -1706,31 +1719,31 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
             float wPx = w.width * physics.SCALE;
             float hPx = w.height * physics.SCALE;
 
-            sf::RectangleShape bbox(sf::Vector2f(wPx, hPx));
-            bbox.setOrigin(wPx / 2.0f, hPx / 2.0f);
-            bbox.setPosition(pos.x * physics.SCALE, pos.y * physics.SCALE);
-            bbox.setRotation(rot * 180.0f / 3.14159f);
+            sf::RectangleShape bbox({wPx, hPx});
+            bbox.setOrigin({wPx / 2.0f, hPx / 2.0f});
+            bbox.setPosition({pos.x * physics.SCALE, pos.y * physics.SCALE});
+            bbox.setRotation(sf::degrees(rot * 180.0f / 3.14159f));
             bbox.setFillColor(sf::Color(255, 255, 255, 10));
             bbox.setOutlineColor(sf::Color(255, 255, 255, 150));
             bbox.setOutlineThickness(1.5f);
             gameBuffer.draw(bbox);
 
             sf::Transform t;
-            t.translate(pos.x * physics.SCALE, pos.y * physics.SCALE);
-            t.rotate(rot * 180.0f / 3.14159f);
+            t.translate({pos.x * physics.SCALE, pos.y * physics.SCALE});
+            t.rotate(sf::degrees(rot * 180.0f / 3.14159f));
 
             bool rotActive = (currentGizmo == GizmoState::Rotating) || (currentGizmo == GizmoState::None && isHoveringRotate);
-            sf::Vector2f topEdgePx = t.transformPoint(0.0f, -hPx / 2.0f);
-            sf::Vector2f rotHandlePx = t.transformPoint(0.0f, -hPx / 2.0f - 1.5f * physics.SCALE);
-            
-            sf::VertexArray lineToRot(sf::Lines, 2);
-            lineToRot[0].position = topEdgePx; lineToRot[1].position = rotHandlePx;
-            lineToRot[0].color = sf::Color(255, 150, 0); lineToRot[1].color = sf::Color(255, 150, 0);
+            sf::Vector2f topEdgePx = t.transformPoint({0.0f, -hPx / 2.0f});
+            sf::Vector2f rotHandlePx = t.transformPoint({0.0f, -hPx / 2.0f - 1.5f * physics.SCALE});
+
+            sf::VertexArray lineToRot(sf::PrimitiveType::Lines, 2);
+            lineToRot[0] = sf::Vertex{topEdgePx, sf::Color(255, 150, 0)};
+            lineToRot[1] = sf::Vertex{rotHandlePx, sf::Color(255, 150, 0)};
             gameBuffer.draw(lineToRot);
 
             float rotRadius = (rotActive ? 0.4f : 0.3f) * physics.SCALE;
             sf::CircleShape rotCircle(rotRadius);
-            rotCircle.setOrigin(rotRadius, rotRadius);
+            rotCircle.setOrigin({rotRadius, rotRadius});
             rotCircle.setPosition(rotHandlePx);
             rotCircle.setFillColor(rotActive ? sf::Color(255, 150, 0, 180) : sf::Color(255, 150, 0, 100));
             rotCircle.setOutlineColor(sf::Color(255, 150, 0));
@@ -1738,34 +1751,34 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
             gameBuffer.draw(rotCircle);
 
             sf::Vector2f cornersPx[4] = {
-                t.transformPoint(-wPx / 2.0f, -hPx / 2.0f),
-                t.transformPoint( wPx / 2.0f, -hPx / 2.0f),
-                t.transformPoint( wPx / 2.0f,  hPx / 2.0f),
-                t.transformPoint(-wPx / 2.0f,  hPx / 2.0f)
+                    t.transformPoint({-wPx / 2.0f, -hPx / 2.0f}),
+                    t.transformPoint({ wPx / 2.0f, -hPx / 2.0f}),
+                    t.transformPoint({ wPx / 2.0f,  hPx / 2.0f}),
+                    t.transformPoint({-wPx / 2.0f,  hPx / 2.0f})
             };
 
             for (int i = 0; i < 4; i++) {
                 bool isHovered = (currentGizmo == GizmoState::Scaling && activeScaleCorner == i) || (currentGizmo == GizmoState::None && hoveredScaleCorner == i);
                 float scaleSize = (isHovered ? 0.4f : 0.25f) * physics.SCALE;
-                sf::RectangleShape scaleRect(sf::Vector2f(scaleSize, scaleSize));
-                scaleRect.setOrigin(scaleSize / 2.0f, scaleSize / 2.0f);
+                sf::RectangleShape scaleRect({scaleSize, scaleSize});
+                scaleRect.setOrigin({scaleSize / 2.0f, scaleSize / 2.0f});
                 scaleRect.setPosition(cornersPx[i]);
-                scaleRect.setRotation(rot * 180.0f / 3.14159f);
+                scaleRect.setRotation(sf::degrees(rot * 180.0f / 3.14159f));
                 scaleRect.setFillColor(isHovered ? sf::Color(0, 255, 100, 200) : sf::Color(0, 255, 100, 100));
                 scaleRect.setOutlineColor(sf::Color(0, 255, 100));
                 scaleRect.setOutlineThickness(1.5f);
                 gameBuffer.draw(scaleRect);
             }
-        } 
+        }
         else if (selectedType == EntityType::WinZone) {
             float wPx = physics.winZoneSize[0] * physics.SCALE;
             float hPx = physics.winZoneSize[1] * physics.SCALE;
             float xPx = physics.winZonePos[0] * physics.SCALE;
             float yPx = physics.winZonePos[1] * physics.SCALE;
 
-            sf::RectangleShape bbox(sf::Vector2f(wPx, hPx));
-            bbox.setOrigin(wPx / 2.0f, hPx / 2.0f);
-            bbox.setPosition(xPx, yPx);
+            sf::RectangleShape bbox({wPx, hPx});
+            bbox.setOrigin({wPx / 2.0f, hPx / 2.0f});
+            bbox.setPosition({xPx, yPx});
             bbox.setFillColor(sf::Color(255, 255, 255, 10));
             bbox.setOutlineColor(sf::Color(255, 255, 255, 150));
             bbox.setOutlineThickness(1.5f);
@@ -1781,8 +1794,8 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
             for (int i = 0; i < 4; i++) {
                 bool isHovered = (currentGizmo == GizmoState::Scaling && activeScaleCorner == i) || (currentGizmo == GizmoState::None && hoveredScaleCorner == i);
                 float scaleSize = (isHovered ? 0.4f : 0.25f) * physics.SCALE;
-                sf::RectangleShape scaleRect(sf::Vector2f(scaleSize, scaleSize));
-                scaleRect.setOrigin(scaleSize / 2.0f, scaleSize / 2.0f);
+                sf::RectangleShape scaleRect({scaleSize, scaleSize});
+                scaleRect.setOrigin({scaleSize / 2.0f, scaleSize / 2.0f});
                 scaleRect.setPosition(cornersPx[i]);
                 scaleRect.setFillColor(isHovered ? sf::Color(0, 255, 100, 200) : sf::Color(0, 255, 100, 100));
                 scaleRect.setOutlineColor(sf::Color(0, 255, 100));
@@ -1792,12 +1805,12 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
         }
         else if (selectedType == EntityType::Racers && selectedIndex >= 0 && selectedIndex < bodies.size()) {
             b2Body* b = bodies[selectedIndex];
-            float rSize = physics.currentRacerSize * physics.SCALE + (0.3f * physics.SCALE); 
-            
-            sf::RectangleShape bbox(sf::Vector2f(rSize, rSize));
-            bbox.setOrigin(rSize / 2.0f, rSize / 2.0f);
-            bbox.setPosition(b->GetPosition().x * physics.SCALE, b->GetPosition().y * physics.SCALE);
-            bbox.setRotation(b->GetAngle() * 180.0f / 3.14159f);
+            float rSize = physics.currentRacerSize * physics.SCALE + (0.3f * physics.SCALE);
+
+            sf::RectangleShape bbox({rSize, rSize});
+            bbox.setOrigin({rSize / 2.0f, rSize / 2.0f});
+            bbox.setPosition({b->GetPosition().x * physics.SCALE, b->GetPosition().y * physics.SCALE});
+            bbox.setRotation(sf::degrees(b->GetAngle() * 180.0f / 3.14159f));
             bbox.setFillColor(sf::Color::Transparent);
             bbox.setOutlineColor(sf::Color::White);
             bbox.setOutlineThickness(2.0f);
@@ -1806,66 +1819,67 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
 
         gameBuffer.display();
 
-        // 1. Declaramos el sprite acá arriba para que exista en todo este bloque
-        sf::Sprite renderSprite;
+        // 1. Declaramos un puntero a la textura final para no instanciar el sprite vacío (prohibido en SFML 3)
+        const sf::Texture* textureToRender = nullptr;
 
         if (enableBloom) {
-            // 1. EXTRAER BRILLO 
-            brightnessShader.setUniform("source", sf::Shader::CurrentTexture);
+            // 1. EXTRAER BRILLO
+            brightnessShader.setUniform("source", gameBuffer.getTexture());
             brightnessShader.setUniform("threshold", bloomThreshold);
             brightnessBuffer.clear(sf::Color::Black);
             sf::Sprite brightSprite(gameBuffer.getTexture());
-            brightSprite.setScale(0.5f, 0.5f); 
+            brightSprite.setScale({0.5f, 0.5f});
             brightnessBuffer.draw(brightSprite, &brightnessShader);
             brightnessBuffer.display();
 
-            // 2. DESENFOQUE GAUSSIANO 
-            // FIX: Puntero a constante porque getTexture() devuelve const
+            // 2. DESENFOQUE GAUSSIANO
             const sf::Texture* currentSource = &brightnessBuffer.getTexture();
-            
+
             for (int i = 0; i < blurIterations; ++i) {
                 // Pasada Horizontal
-                blurShader.setUniform("source", sf::Shader::CurrentTexture);
+                blurShader.setUniform("source", *currentSource);
                 blurShader.setUniform("dir", sf::Vector2f(1.0f / BLOOM_W, 0.0f));
                 blurBuffer1.clear(sf::Color::Transparent);
                 blurBuffer1.draw(sf::Sprite(*currentSource), &blurShader);
                 blurBuffer1.display();
 
                 // Pasada Vertical
-                blurShader.setUniform("source", sf::Shader::CurrentTexture);
+                blurShader.setUniform("source", blurBuffer1.getTexture());
                 blurShader.setUniform("dir", sf::Vector2f(0.0f, 1.0f / BLOOM_H));
                 blurBuffer2.clear(sf::Color::Transparent);
                 blurBuffer2.draw(sf::Sprite(blurBuffer1.getTexture()), &blurShader);
                 blurBuffer2.display();
-                
-                // FIX: La reasignación ahora funciona perfecto porque el puntero es const
+
                 currentSource = &blurBuffer2.getTexture();
             }
 
-            // 3. FUSIÓN ADITIVA 
-            blendShader.setUniform("baseTexture", sf::Shader::CurrentTexture);
+            // 3. FUSIÓN ADITIVA
+            blendShader.setUniform("baseTexture", gameBuffer.getTexture());
             blendShader.setUniform("bloomTexture", *currentSource);
             blendShader.setUniform("multiplier", bloomMultiplier);
-            
+
             finalBuffer.clear();
             sf::Sprite finalBaseSprite(gameBuffer.getTexture());
             finalBuffer.draw(finalBaseSprite, &blendShader);
             finalBuffer.display();
 
-            if (recorder && recorder->isRecording) recorder->addFrame(finalBuffer.getTexture());
-            renderSprite.setTexture(finalBuffer.getTexture()); // Asignamos textura
+            textureToRender = &finalBuffer.getTexture();
         } else {
-            if (recorder && recorder->isRecording) recorder->addFrame(gameBuffer.getTexture());
-            renderSprite.setTexture(gameBuffer.getTexture()); // Asignamos textura
+            textureToRender = &gameBuffer.getTexture();
         }
 
-        window.clear(sf::Color(20, 20, 20)); 
+        if (recorder && recorder->isRecording) recorder->addFrame(*textureToRender);
+
+        // Instanciamos el sprite directamente con la textura (RAII puro)
+        sf::Sprite renderSprite(*textureToRender);
+
+        window.clear(sf::Color(20, 20, 20));
 
         // 2. Ahora el resto del código que ya tenías para centrar el viewport
         // se aplica sobre el renderSprite que ya tiene su textura correcta.
-        renderSprite.setScale(scaleBase, scaleBase);
+        renderSprite.setScale({scaleBase, scaleBase});
         // offsetX y offsetY ya los calculamos arriba con el layout dinámico
-        renderSprite.setPosition(offsetX, offsetY);
+        renderSprite.setPosition({offsetX, offsetY});
 
         // Opcional: Le metemos un marquito sutil al viewport para que se despegue del fondo
    /*   sf::RectangleShape viewportBorder(sf::Vector2f(DISPLAY_SIZE + 2, DISPLAY_SIZE + 2));
@@ -1873,7 +1887,7 @@ ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_
         viewportBorder.setFillColor(sf::Color::Transparent);
         viewportBorder.setOutlineColor(sf::Color(60, 60, 60));
         viewportBorder.setOutlineThickness(1.0f);
-        
+
         window.draw(viewportBorder); */
         window.draw(renderSprite);
 

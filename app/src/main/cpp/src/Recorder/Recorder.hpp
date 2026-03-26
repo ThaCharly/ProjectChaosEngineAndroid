@@ -10,7 +10,8 @@
 #include <atomic>
 #include <SFML/Graphics.hpp>
 #include <SFML/OpenGL.hpp> // <--- Magia de OpenGL
-#include <SFML/Audio.hpp> 
+#include <SFML/Audio.hpp>
+#include <cstdint>
 
 class Recorder {
 public:
@@ -18,7 +19,7 @@ public:
     ~Recorder();
 
     void addFrame(const sf::Texture& texture);
-    void addAudioEvent(const sf::Int16* samples, std::size_t sampleCount, float volume);
+    void addAudioEvent(const std::int16_t* samples, std::size_t sampleCount, float volume);
     void stop(); 
 
     bool isRecording = false; 
@@ -45,7 +46,7 @@ private:
     std::mutex queueMutex;
     std::condition_variable queueCV;
     std::condition_variable queueSpaceCV;
-    std::queue<std::vector<sf::Uint8>> frameQueue;
+    std::queue<std::vector<std::uint8_t>> frameQueue;
     std::atomic<bool> isWorkerRunning;
 
     const size_t MAX_QUEUE_SIZE = 480; // 60 son aproximadamente 1.1GB de RAM, 480 son 8.8GB
